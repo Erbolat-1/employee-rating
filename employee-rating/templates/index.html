@@ -16,6 +16,7 @@
             --star-color: #f59e0b;
             --error-color: #ef4444;
             --success-color: #10b981;
+            --chip-bg: #334155;
         }
 
         * {
@@ -37,7 +38,7 @@
 
         .container {
             width: 100%;
-            max-width: 480px;
+            max-width: 500px;
             background-color: var(--card-bg);
             border: 1px solid var(--border-color);
             border-radius: 16px;
@@ -93,6 +94,37 @@
             min-height: 110px;
         }
 
+        /* Быстрые шаблоны примеров */
+        .examples-title {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .presets-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .preset-btn {
+            background-color: var(--chip-bg);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 13px;
+            text-align: left;
+            cursor: pointer;
+            transition: background 0.2s ease, border-color 0.2s ease;
+        }
+
+        .preset-btn:hover {
+            background-color: #475569;
+            border-color: var(--accent-color);
+        }
+
         .btn-submit {
             width: 100%;
             padding: 14px;
@@ -103,7 +135,7 @@
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: background-color 0.2s ease, opacity 0.2s ease;
+            transition: background-color 0.2s ease;
         }
 
         .btn-submit:hover {
@@ -161,8 +193,8 @@
 
 <div class="container">
     <div class="header">
-        <h1>Оценка по тексту отзыва</h1>
-        <p>Напишите ваш отзыв — система автоматически проанализирует текст и выставит оценку</p>
+        <h1>Оценка сотрудников по тексту</h1>
+        <p>Выберите готовый пример или напишите свой отзыв вручную</p>
     </div>
 
     <form id="ratingForm">
@@ -177,11 +209,26 @@
         </div>
 
         <div class="form-group">
-            <label for="comment">Текст отзыва / описание работы *</label>
-            <textarea id="comment" placeholder="Опишите работу сотрудника (например: 'Сотрудник отнесся к работе вежливо и быстро, профессионал своем деле')" required></textarea>
+            <label>Примеры отзывов (кликните для подстановки):</label>
+            <div class="presets-list">
+                <button type="button" class="preset-btn" onclick="setPreset('Сотрудник работал отлично, вежливо и очень быстро. Большое спасибо!')">
+                    🟢 <b>Положительный:</b> «Отлично, вежливо и очень быстро...»
+                </button>
+                <button type="button" class="preset-btn" onclick="setPreset('Проверка прошла корректно и аккуратно. Замечаний нет.')">
+                    🟡 <b>Нейтральный:</b> «Проверка прошла корректно, замечаний нет.»
+                </button>
+                <button type="button" class="preset-btn" onclick="setPreset('Сотрудник работал очень медленно, допустил ошибку и общался грубо.')">
+                    🔴 <b>Отрицательный:</b> «Работал медленно, ошибка и грубость...»
+                </button>
+            </div>
         </div>
 
-        <button type="submit" class="btn-submit" id="submitBtn">Проанализировать и отправить</button>
+        <div class="form-group">
+            <label for="comment">Текст отзыва для отправки *</label>
+            <textarea id="comment" placeholder="Выберите пример выше или введите текст вручную..." required></textarea>
+        </div>
+
+        <button type="submit" class="btn-submit" id="submitBtn">Отправить и проанализировать</button>
     </form>
 
     <div id="alertError" class="alert-error"></div>
@@ -198,6 +245,13 @@
     const submitBtn = document.getElementById('submitBtn');
     const alertError = document.getElementById('alertError');
     const resultBox = document.getElementById('resultBox');
+    const commentInput = document.getElementById('comment');
+
+    // Функция быстрых ответов/примеров
+    function setPreset(text) {
+        commentInput.value = text;
+        commentInput.focus();
+    }
 
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
@@ -207,15 +261,15 @@
 
         const checkpoint = document.getElementById('checkpoint').value.trim();
         const employeeName = document.getElementById('employee_name').value.trim();
-        const comment = document.getElementById('comment').value.trim();
+        const comment = commentInput.value.trim();
 
         if (!checkpoint || !employeeName || !comment) {
-            showError('Заполните все обязательные поля!');
+            showError('Заполните все поля!');
             return;
         }
 
         submitBtn.disabled = true;
-        submitBtn.innerText = 'Анализ текста...';
+        submitBtn.innerText = 'Анализ и отправка...';
 
         try {
             const response = await fetch('/api/rate', {
@@ -236,21 +290,21 @@
                 document.getElementById('resultMessage').innerText = result.message;
                 document.getElementById('resultStars').innerText = '★'.repeat(result.rating) + '☆'.repeat(5 - result.rating);
                 document.getElementById('resultDetails').innerHTML = `
-                    Рассчитанный балл: <b>${result.rating} из 5</b><br>
-                    Тональность текста: <b>${result.sentiment}</b><br>
-                    Слов в тексте: <b>${result.word_count}</b>
+                    Автоматическая оценка: <b>${result.rating} из 5</b><br>
+                    Тональность: <b>${result.sentiment}</b><br>
+                    Количество слов: <b>${result.word_count}</b>
                 `;
                 
                 resultBox.style.display = 'block';
             } else {
-                showError(result.message || 'Ошибка отправки.');
+                showError(result.message || 'Ошибка обработки.');
                 submitBtn.disabled = false;
-                submitBtn.innerText = 'Проанализировать и отправить';
+                submitBtn.innerText = 'Отправить и проанализировать';
             }
         } catch (err) {
-            showError('Ошибка сети или сервера. Проверьте подключение.');
+            showError('Ошибка связи с сервером.');
             submitBtn.disabled = false;
-            submitBtn.innerText = 'Проанализировать и отправить';
+            submitBtn.innerText = 'Отправить и проанализировать';
         }
     });
 
