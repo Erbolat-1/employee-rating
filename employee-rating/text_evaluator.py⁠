@@ -1,0 +1,45 @@
+import re
+
+POSITIVE_WORDS = {
+    "отлично", "замечательно", "быстро", "вежливо", "профессионально",
+    "качественно", "спасибо", "благодарность", "корректно", "чисто",
+    "удобно", "прекрасно", "хорошо", "компетентно", "оперативно", "молодец"
+}
+
+NEGATIVE_WORDS = {
+    "плохо", "медленно", "грубо", "ужасно", "хамство", "ошибка",
+    "очередь", "долго", "невнимательно", "превышение", "халатность",
+    "претензия", "задержка", "проблема", "бардак", "грязь", "отвратительно"
+}
+
+def analyze_text(text: str) -> dict:
+    """Анализирует текст отзыва, вычисляет тональность и ключевые метрики."""
+    if not text or not text.strip():
+        return {
+            "sentiment": "Нейтральный",
+            "word_count": 0,
+            "char_count": 0,
+            "pos_count": 0,
+            "neg_count": 0
+        }
+
+    clean_text = text.lower()
+    words = re.findall(r'\b[а-яа-яa-z0-9]+\b', clean_text)
+    
+    pos_count = sum(1 for w in words if w in POSITIVE_WORDS)
+    neg_count = sum(1 for w in words if w in NEGATIVE_WORDS)
+
+    if pos_count > neg_count:
+        sentiment = "Положительный"
+    elif neg_count > pos_count:
+        sentiment = "Отрицательный"
+    else:
+        sentiment = "Нейтральный"
+
+    return {
+        "sentiment": sentiment,
+        "word_count": len(words),
+        "char_count": len(text),
+        "pos_count": pos_count,
+        "neg_count": neg_count
+    }
