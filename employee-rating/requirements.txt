@@ -3,3 +3,5 @@ flask-cors
 pyTelegramBotAPI
 requests
 gunicorn
+pandas
+openpyxl
