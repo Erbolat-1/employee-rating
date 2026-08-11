@@ -54,7 +54,6 @@
         .header h1 {
             font-size: 22px;
             font-weight: 700;
-            color: var(--text-main);
             margin-bottom: 8px;
         }
 
@@ -72,11 +71,9 @@
             font-size: 14px;
             font-weight: 500;
             margin-bottom: 8px;
-            color: var(--text-main);
         }
 
-        input[type="text"],
-        textarea {
+        input[type="text"], textarea {
             width: 100%;
             padding: 12px 14px;
             background-color: var(--bg-color);
@@ -88,8 +85,7 @@
             transition: border-color 0.2s ease;
         }
 
-        input[type="text"]:focus,
-        textarea:focus {
+        input[type="text"]:focus, textarea:focus {
             border-color: var(--accent-color);
         }
 
@@ -98,12 +94,10 @@
             min-height: 90px;
         }
 
-        /* Интерактивные звёзды */
         .stars-container {
             display: flex;
             gap: 12px;
             justify-content: center;
-            direction: row;
             margin-top: 6px;
         }
 
@@ -115,8 +109,7 @@
             user-select: none;
         }
 
-        .star:hover,
-        .star.active {
+        .star:hover, .star.active {
             color: var(--star-active);
         }
 
@@ -147,7 +140,6 @@
             cursor: not-allowed;
         }
 
-        /* Сообщения об успехе/ошибке */
         .alert {
             display: none;
             padding: 16px;
@@ -176,14 +168,14 @@
 
 <div class="container">
     <div class="header">
-        <h1>Оценка качества обслуживания</h1>
-        <p>Пожалуйста, оставьте ваш отзыв о работе сотрудника</p>
+        <h1>Оценка сотрудников</h1>
+        <p>Пожалуйста, оцените качество обслуживания</p>
     </div>
 
     <form id="ratingForm">
         <div class="form-group">
             <label for="checkpoint">Пункт пропуска *</label>
-            <input type="text" id="checkpoint" placeholder="Например: КПП №1" required>
+            <input type="text" id="checkpoint" placeholder="КПП №1" required>
         </div>
 
         <div class="form-group">
@@ -192,7 +184,7 @@
         </div>
 
         <div class="form-group">
-            <label>Оценка качества работы *</label>
+            <label>Ваша оценка *</label>
             <div class="stars-container" id="starsContainer">
                 <span class="star" data-value="1">&#9733;</span>
                 <span class="star" data-value="2">&#9733;</span>
@@ -203,8 +195,8 @@
         </div>
 
         <div class="form-group">
-            <label for="comment">Комментарий</label>
-            <textarea id="comment" placeholder="Напишите ваш отзыв (необязательно)"></textarea>
+            <label for="comment">Текст отзыва / комментарий</label>
+            <textarea id="comment" placeholder="Опишите подробности (необязательно)"></textarea>
         </div>
 
         <button type="submit" class="btn-submit" id="submitBtn">Отправить оценку</button>
@@ -222,11 +214,9 @@
     const alertSuccess = document.getElementById('alertSuccess');
     const alertError = document.getElementById('alertError');
 
-    // Логика выбора звёзд
     stars.forEach(star => {
         star.addEventListener('mouseover', function() {
-            const val = this.getAttribute('data-value');
-            highlightStars(val);
+            highlightStars(this.getAttribute('data-value'));
         });
 
         star.addEventListener('mouseout', function() {
@@ -249,19 +239,14 @@
         });
     }
 
-    // Отправка формы
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
 
         alertSuccess.style.display = 'none';
         alertError.style.display = 'none';
 
-        const checkpoint = document.getElementById('checkpoint').value.trim();
-        const employeeName = document.getElementById('employee_name').value.trim();
-        const comment = document.getElementById('comment').value.trim();
-
         if (currentRating === 0) {
-            showError('Пожалуйста, выберите оценку от 1 до 5 звёзд.');
+            showError('Пожалуйста, выберите количество звёзд!');
             return;
         }
 
@@ -271,14 +256,12 @@
         try {
             const response = await fetch('/api/rate', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    checkpoint: checkpoint,
-                    employee_name: employeeName,
+                    checkpoint: document.getElementById('checkpoint').value.trim(),
+                    employee_name: document.getElementById('employee_name').value.trim(),
                     rating: currentRating,
-                    comment: comment
+                    comment: document.getElementById('comment').value.trim()
                 })
             });
 
@@ -289,12 +272,12 @@
                 alertSuccess.innerText = result.message;
                 alertSuccess.style.display = 'block';
             } else {
-                showError(result.message || 'Произошла ошибка при отправке.');
+                showError(result.message || 'Ошибка отправки.');
                 submitBtn.disabled = false;
                 submitBtn.innerText = 'Отправить оценку';
             }
         } catch (err) {
-            showError('Ошибка сети или сервера. Проверьте подключение к интернету.');
+            showError('Ошибка сети или сервера. Проверьте интернет.');
             submitBtn.disabled = false;
             submitBtn.innerText = 'Отправить оценку';
         }
