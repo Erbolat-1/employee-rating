@@ -1,85 +1,124 @@
-import telebot
-import sqlite3
 import os
+import time
+import requests
+import telebot
+from dotenv import load_dotenv
 
+load_dotenv()
 
-# ==============================
+# ==========================================
 # НАСТРОЙКИ
-# ==============================
+# ==========================================
 
-BOT_TOKEN = "8606610454:AAG6wYBzLBI0ETLojTWx7dORnbRTRUBUQOo"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
+API_URL = "https://employee-rating-1.onrender.com/api/ratings"
 
-# ==============================
-# БАЗА ДАННЫХ
-# ==============================
+if not BOT_TOKEN:
+    raise RuntimeError("Не указан BOT_TOKEN")
 
-BASE_DIR = os.path.dirname(
-    os.path.dirname(
-        os.path.abspath(__file__)
-    )
-)
+if not CHAT_ID:
+    raise RuntimeError("Не указан CHAT_ID")
 
-DB_PATH = os.path.join(
-    BASE_DIR,
-    "ratings.db"
-)
+bot = telebot.TeleBot(BOT_TOKEN)
 
 
-bot = telebot.TeleBot(
-    BOT_TOKEN
-)
-
-
-# ==============================
+# ==========================================
 # /start
-# ==============================
+# ==========================================
 
-@bot.message_handler(
-    commands=["start"]
-)
+@bot.message_handler(commands=["start"])
 def start(message):
 
     bot.send_message(
         message.chat.id,
-
-        "🤖 Система оценки сотрудников\n\n"
-        "Доступные команды:\n\n"
-        "/report — общий отчёт\n"
-        "/last — последние оценки"
+        "🤖 Бот оценки сотрудников запущен.\n\n"
+        "Команды:\n"
+        "/report — получить отчет\n"
+        "/help — помощь"
     )
 
 
-# ==============================
-# ОБЩИЙ ОТЧЁТ
-# ==============================
+# ==========================================
+# /help
+# ==========================================
 
-@bot.message_handler(
-    commands=["report"]
-)
+@bot.message_handler(commands=["help"])
+def help_command(message):
+
+    bot.send_message(
+        message.chat.id,
+        "📋 Доступные команды:\n\n"
+        "/start — запуск\n"
+        "/report — последний отчет\n"
+        "/help — помощь"
+    )
+
+
+# ==========================================
+# ФОРМАТ ОЦЕНКИ
+# ==========================================
+
+def format_rating(item):
+
+    stars = "⭐" * int(item["rating"])
+
+    comment = item.get("comment") or "Без комментария"
+
+    return (
+        "📝 НОВАЯ ОЦЕНКА\n\n"
+        f"🆔 ID: {item['id']}\n"
+        f"📍 Пункт пропуска: {item['checkpoint']}\n"
+        f"👤 Сотрудник: {item['employee']}\n"
+        f"⭐ Оценка: {stars} ({item['rating']}/5)\n"
+        f"💬 Комментарий: {comment}\n"
+        f"🕐 Дата: {item['created_at']}"
+    )
+
+
+# ==========================================
+# ПОЛУЧЕНИЕ ДАННЫХ
+# ==========================================
+
+def get_ratings():
+
+    try:
+
+        response = requests.get(
+            API_URL,
+            timeout=20
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        if not data.get("success"):
+            return []
+
+        return data.get("ratings", [])
+
+    except Exception as error:
+
+        print(
+            "Ошибка получения оценок:",
+            error
+        )
+
+        return []
+
+
+# ==========================================
+# /report
+# ==========================================
+
+@bot.message_handler(commands=["report"])
 def report(message):
 
-    connection = sqlite3.connect(
-        DB_PATH
-    )
+    ratings = get_ratings()
 
-    cursor = connection.cursor()
-
-
-    cursor.execute("""
-        SELECT
-            COUNT(*),
-            AVG(rating)
-        FROM ratings
-    """)
-
-    total, average = cursor.fetchone()
-
-
-    connection.close()
-
-
-    if total == 0:
+    if not ratings:
 
         bot.send_message(
             message.chat.id,
@@ -88,94 +127,23 @@ def report(message):
 
         return
 
+    # Последние 10 оценок
 
-    text = (
-        "📊 ОТЧЁТ ПО ОЦЕНКАМ\n\n"
+    ratings = ratings[:10]
 
-        f"📝 Всего оценок: {total}\n"
+    text = "📊 ПОСЛЕДНИЕ ОЦЕНКИ\n\n"
 
-        f"⭐ Средняя оценка: "
-        f"{average:.2f} / 5"
-    )
-
-
-    bot.send_message(
-        message.chat.id,
-        text
-    )
-
-
-# ==============================
-# ПОСЛЕДНИЕ ОЦЕНКИ
-# ==============================
-
-@bot.message_handler(
-    commands=["last"]
-)
-def last_ratings(message):
-
-    connection = sqlite3.connect(
-        DB_PATH
-    )
-
-    cursor = connection.cursor()
-
-
-    cursor.execute("""
-        SELECT
-            checkpoint,
-            employee,
-            rating,
-            comment,
-            created_at
-
-        FROM ratings
-
-        ORDER BY id DESC
-
-        LIMIT 10
-    """)
-
-    rows = cursor.fetchall()
-
-
-    connection.close()
-
-
-    if not rows:
-
-        bot.send_message(
-            message.chat.id,
-            "📊 Оценок пока нет."
-        )
-
-        return
-
-
-    text = "📋 ПОСЛЕДНИЕ ОЦЕНКИ\n\n"
-
-
-    for row in rows:
-
-        checkpoint = row[0]
-        employee = row[1]
-        rating = row[2]
-        comment = row[3]
-        created_at = row[4]
-
-
-        stars = "⭐" * rating
-
+    for item in ratings:
 
         text += (
-            f"📍 {checkpoint}\n"
-            f"👤 {employee}\n"
-            f"{stars} ({rating}/5)\n"
-            f"💬 {comment or 'Без комментария'}\n"
-            f"🕐 {created_at}\n"
-            f"──────────────\n"
+            f"🆔 {item['id']}\n"
+            f"📍 {item['checkpoint']}\n"
+            f"👤 {item['employee']}\n"
+            f"⭐ {item['rating']}/5\n"
+            f"💬 {item.get('comment') or 'Без комментария'}\n"
+            f"🕐 {item['created_at']}\n"
+            "━━━━━━━━━━━━━━\n"
         )
-
 
     bot.send_message(
         message.chat.id,
@@ -183,18 +151,89 @@ def last_ratings(message):
     )
 
 
-# ==============================
-# ЗАПУСК
-# ==============================
-@bot.message_handler(commands=["chatid"])
-def get_chat_id(message):
+# ==========================================
+# МОНИТОРИНГ НОВЫХ ОЦЕНОК
+# ==========================================
 
-    bot.send_message(
-        message.chat.id,
-        f"Ваш Chat ID:\n{message.chat.id}"
+last_id = 0
+
+
+def check_new_ratings():
+
+    global last_id
+
+    ratings = get_ratings()
+
+    if not ratings:
+        return
+
+    # API отдаёт новые записи первыми
+
+    newest = ratings[0]
+
+    newest_id = int(
+        newest["id"]
     )
+
+    # Первый запуск
+
+    if last_id == 0:
+
+        last_id = newest_id
+
+        return
+
+    # Есть новая оценка
+
+    if newest_id > last_id:
+
+        new_items = []
+
+        for item in reversed(ratings):
+
+            item_id = int(item["id"])
+
+            if item_id > last_id:
+                new_items.append(item)
+
+        for item in new_items:
+
+            try:
+
+                bot.send_message(
+                    CHAT_ID,
+                    format_rating(item)
+                )
+
+            except Exception as error:
+
+                print(
+                    "Ошибка Telegram:",
+                    error
+                )
+
+        last_id = newest_id
+
+
+# ==========================================
+# ЗАПУСК
+# ==========================================
+
 print("==============================")
 print("TELEGRAM-БОТ ЗАПУЩЕН")
 print("==============================")
 
-bot.infinity_polling()
+while True:
+
+    try:
+
+        check_new_ratings()
+
+    except Exception as error:
+
+        print(
+            "Ошибка:",
+            error
+        )
+
+    time.sleep(10)
