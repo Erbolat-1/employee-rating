@@ -1,378 +1,385 @@
-import io
-import json
-import os
-import re
-import sqlite3
-import urllib.parse
-import urllib.request
-from flask import Flask, jsonify, render_template, request
-import pandas as pd
-
-app = Flask(__name__)
-DATABASE = "ratings.db"
-
-# Ключевые слова для анализа тональности
-POSITIVE_WORDS = {
-    "отлично", "замечательно", "быстро", "вежливо", "профессионально",
-    "качественно", "спасибо", "благодарность", "корректно", "чисто",
-    "удобно", "прекрасно", "хорошо", "компетентно", "оперативно", "молодец",
-    "вежливый", "быстрый", "отличный", "профессионал", "вежливость", "образцово"
-}
-
-NEGATIVE_WORDS = {
-    "плохо", "медленно", "грубо", "ужасно", "хамство", "ошибка",
-    "очередь", "долго", "невнимательно", "превышение", "халатность",
-    "претензия", "задержка", "проблема", "бардак", "грязь", "отвратительно",
-    "грубый", "медлительный", "хам", "ужасный", "плохой", "грубость"
-}
-
-
-def analyze_text(text: str) -> dict:
-    """Расчет оценки от 1 до 5 по содержанию ключевых слов."""
-    if not text or not text.strip():
-        return {"score": 3, "sentiment": "Нейтральный", "word_count": 0}
-
-    clean_text = text.lower()
-    words = re.findall(r'\b[а-яа-яa-z0-9]+\b', clean_text)
-
-    pos_count = sum(1 for w in words if w in POSITIVE_WORDS)
-    neg_count = sum(1 for w in words if w in NEGATIVE_WORDS)
-
-    if pos_count > neg_count:
-        sentiment = "Положительный"
-        score = 5 if (pos_count - neg_count) >= 2 else 4
-    elif neg_count > pos_count:
-        sentiment = "Отрицательный"
-        score = 1 if (neg_count - pos_count) >= 2 else 2
-    else:
-        sentiment = "Нейтральный"
-        score = 3
-
-    return {"score": score, "sentiment": sentiment, "word_count": len(words)}
-
-
-def get_db():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def init_db():
-    with get_db() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS ratings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                checkpoint TEXT NOT NULL,
-                employee_name TEXT NOT NULL,
-                comment TEXT NOT NULL,
-                rating INTEGER NOT NULL,
-                sentiment TEXT NOT NULL,
-                word_count INTEGER NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        conn.commit()
-
-
-init_db()
-
-
-def send_telegram_message(text: str) -> bool:
-    token = os.environ.get("BOT_TOKEN")
-    chat_id = os.environ.get("CHAT_ID")
-
-    if not token or not chat_id:
-        return False
-
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = urllib.parse.urlencode({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode("utf-8")
-
-    try:
-        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/x-www-form-urlencoded"})
-        with urllib.request.urlopen(req, timeout=5) as response:
-            return response.status == 200
-    except Exception as e:
-        print(f"Error sending Telegram message: {e}")
-        return False
-
-
-def send_telegram_document(chat_id: str, file_bytes: bytes, filename: str, caption: str = "") -> bool:
-    token = os.environ.get("BOT_TOKEN")
-    if not token:
-        return False
-
-    url = f"https://api.telegram.org/bot{token}/sendDocument"
-    boundary = "----WebKitFormBoundary7MA44QEldjy1Yb0e"
-    
-    body = []
-    body.append(f"--{boundary}\r\nContent-Disposition: form-data; name=\"chat_id\"\r\n\r\n{chat_id}\r\n".encode("utf-8"))
-    
-    if caption:
-        body.append(f"--{boundary}\r\nContent-Disposition: form-data; name=\"caption\"\r\n\r\n{caption}\r\n".encode("utf-8"))
-        body.append(f"--{boundary}\r\nContent-Disposition: form-data; name=\"parse_mode\"\r\n\r\nHTML\r\n".encode("utf-8"))
-        
-    body.append(f"--{boundary}\r\nContent-Disposition: form-data; name=\"document\"; filename=\"{filename}\"\r\nContent-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\r\n\r\n".encode("utf-8"))
-    body.append(file_bytes)
-    body.append(f"\r\n--{boundary}--\r\n".encode("utf-8"))
-    
-    payload = b"".join(body)
-    headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
-
-    try:
-        req = urllib.request.Request(url, data=payload, headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as response:
-            return response.status == 200
-    except Exception as e:
-        print(f"Error sending document: {e}")
-        return False
-
-
-def send_telegram_webapp_button(chat_id: str, webapp_url: str):
-    token = os.environ.get("BOT_TOKEN")
-    if not token:
-        return
-
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = json.dumps({
-        "chat_id": chat_id,
-        "text": "📊 <b>Нажмите кнопку ниже для просмотра отчета в формате Mini App:</b>",
-        "parse_mode": "HTML",
-        "reply_markup": {
-            "inline_keyboard": [[
-                {
-                    "text": "📈 Открыть интерактивный отчет",
-                    "web_app": {"url": webapp_url}
-                }
-            ]]
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Оценка сотрудников</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent-color: #2563eb;
+            --accent-hover: #1d4ed8;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --star-color: #f59e0b;
+            --error-color: #ef4444;
+            --success-color: #10b981;
         }
-    }).encode("utf-8")
 
-    headers = {"Content-Type": "application/json"}
-    try:
-        req = urllib.request.Request(url, data=payload, headers=headers)
-        urllib.request.urlopen(req, timeout=5)
-    except Exception as e:
-        print(f"Error sending Web App button: {e}")
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
 
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 16px;
+        }
 
-def process_telegram_command(command: str, chat_id: str):
-    token = os.environ.get("BOT_TOKEN")
-    if not token:
-        return
+        .container {
+            width: 100%;
+            max-width: 520px;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 28px 24px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
 
-    if command == "/start":
-        text = (
-            "👋 <b>Система оценки сотрудников</b>\n\n"
-            "Доступные команды:\n"
-            "/app или /view — Открыть интерактивный отчет (Mini App)\n"
-            "/excel — Скачать выгрузку всех данных в формате Excel\n"
-            "/report — Краткая сводка оценок\n"
-            "/last — Последние 10 отзывов\n"
-            "/delete_last — Удалить последний отзыв\n"
-            "/reset_all — Полностью очистить базу данных\n"
-            "/chatid — Узнать ID этого чата"
-        )
-        send_telegram_message(text)
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
 
-    elif command in ["/app", "/view"]:
-        server_url = os.environ.get("SERVER_URL", "https://your-domain.onrender.com")
-        webapp_url = f"{server_url}/webapp/report"
-        send_telegram_webapp_button(chat_id, webapp_url)
+        .header h1 {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
 
-    elif command in ["/excel", "/export"]:
-        with get_db() as conn:
-            df = pd.read_sql_query(
-                """
-                SELECT 
-                    id AS 'ID',
-                    created_at AS 'Дата и время',
-                    checkpoint AS 'Пункт пропуска',
-                    employee_name AS 'Сотрудник',
-                    comment AS 'Текст отзыва',
-                    rating AS 'Оценка',
-                    sentiment AS 'Тональность',
-                    word_count AS 'Слов'
-                FROM ratings
-                ORDER BY id DESC
-                """, 
-                conn
-            )
+        .header p {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
 
-        if df.empty:
-            send_telegram_message("ℹ️ База данных пуста. Записей для Excel нет.")
-            return
+        .tab-buttons {
+            display: flex;
+            background-color: var(--bg-color);
+            border-radius: 10px;
+            padding: 4px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+        }
 
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Отчет')
-        
-        excel_bytes = output.getvalue()
-        send_telegram_document(
-            chat_id, 
-            excel_bytes, 
-            "Отчет_по_оценкам.xlsx", 
-            f"📊 <b>Выгрузка в Excel готова!</b>\nВсего отзывов в базе: <b>{len(df)}</b>"
-        )
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
 
-    elif command == "/delete_last":
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT id FROM ratings ORDER BY id DESC LIMIT 1")
-            row = cursor.fetchone()
-            if row:
-                conn.execute("DELETE FROM ratings WHERE id = ?", (row["id"],))
-                conn.commit()
-                text = f"🗑️ <b>Запись №{row['id']} была удалена.</b>"
-            else:
-                text = "ℹ️ База данных уже пуста."
-        send_telegram_message(text)
+        .tab-btn.active {
+            background-color: var(--accent-color);
+            color: #ffffff;
+        }
 
-    elif command == "/reset_all":
-        with get_db() as conn:
-            conn.execute("DELETE FROM ratings")
-            conn.execute("DELETE FROM sqlite_sequence WHERE name='ratings'")
-            conn.commit()
-        send_telegram_message("🔥 <b>База данных успешно очищена!</b>")
+        .tab-content {
+            display: none;
+        }
 
-    elif command == "/report":
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*), AVG(rating) FROM ratings")
-            count, avg_rating = cursor.fetchone()
+        .tab-content.active {
+            display: block;
+        }
 
-        avg_val = round(avg_rating, 2) if avg_rating else 0.0
-        text = (
-            f"📊 <b>Общая статистика:</b>\n\n"
-            f"• Всего отзывов: <b>{count}</b>\n"
-            f"• Средний балл: <b>{avg_val} / 5 ⭐</b>"
-        )
-        send_telegram_message(text)
+        .form-group {
+            margin-bottom: 18px;
+        }
 
-    elif command == "/last":
-        with get_db() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT checkpoint, employee_name, comment, rating, sentiment, created_at FROM ratings ORDER BY id DESC LIMIT 10"
-            )
-            rows = cursor.fetchall()
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
 
-        if not rows:
-            text = "ℹ️ Отзывов пока нет."
-        else:
-            text = "📋 <b>Последние 10 отзывов:</b>\n\n"
-            for r in rows:
-                stars = "⭐" * r["rating"]
-                text += (
-                    f"📍 <b>Пункт:</b> {r['checkpoint']}\n"
-                    f"👤 <b>Сотрудник:</b> {r['employee_name']}\n"
-                    f"💬 <b>Текст:</b> <i>«{r['comment']}»</i>\n"
-                    f"⭐ <b>Оценка:</b> {stars} ({r['rating']}/5)\n"
-                    f"🎭 <b>Тональность:</b> {r['sentiment']}\n"
-                    f"🕒 <b>Дата:</b> {r['created_at']}\n"
-                    f"------------------------------\n"
-                )
-        send_telegram_message(text)
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 12px 14px;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-main);
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
 
-    elif command == "/chatid":
-        send_telegram_message(f"🆔 <b>ID чата:</b> <code>{chat_id}</code>")
+        input[type="text"]:focus, textarea:focus {
+            border-color: var(--accent-color);
+        }
 
+        textarea {
+            resize: vertical;
+            min-height: 110px;
+        }
 
-@app.route("/")
-def index():
-    return render_template("index.html")
+        .presets-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
 
+        .preset-card {
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: border-color 0.2s ease, background 0.2s ease;
+        }
 
-@app.route("/webapp/report")
-def webapp_report():
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT id, checkpoint, employee_name, comment, rating, sentiment, created_at 
-            FROM ratings 
-            ORDER BY id DESC
-            """
-        )
-        ratings = cursor.fetchall()
-    return render_template("report_webapp.html", ratings=ratings)
+        .preset-card:hover {
+            border-color: var(--accent-color);
+            background-color: #1e293b;
+        }
 
+        .preset-tag {
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
 
-@app.route("/api/rate", methods=["POST"])
-def add_rating():
-    data = request.get_json() or {}
+        .preset-tag.pos { color: #10b981; }
+        .preset-tag.neu { color: #f59e0b; }
+        .preset-tag.neg { color: #ef4444; }
 
-    checkpoint = data.get("checkpoint", "").strip()
-    employee_name = data.get("employee_name", "").strip()
-    comment = data.get("comment", "").strip()
+        .preset-text {
+            font-size: 13px;
+            color: var(--text-main);
+            line-height: 1.4;
+        }
 
-    if not checkpoint or not employee_name or not comment:
-        return jsonify({"success": False, "message": "Заполните все обязательные поля!"}), 400
+        .btn-submit {
+            width: 100%;
+            padding: 14px;
+            background-color: var(--accent-color);
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            margin-top: 10px;
+        }
 
-    analysis = analyze_text(comment)
-    rating = analysis["score"]
-    sentiment = analysis["sentiment"]
-    word_count = analysis["word_count"]
+        .btn-submit:hover {
+            background-color: var(--accent-hover);
+        }
 
-    with get_db() as conn:
-        conn.execute(
-            """INSERT INTO ratings (checkpoint, employee_name, comment, rating, sentiment, word_count)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (checkpoint, employee_name, comment, rating, sentiment, word_count),
-        )
-        conn.commit()
+        .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
 
-    stars_str = "⭐" * rating
+        .result-box {
+            display: none;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            background-color: rgba(16, 185, 129, 0.1);
+            border: 1px solid var(--success-color);
+            text-align: center;
+        }
 
-    # Оформление в Telegram
-    if rating <= 2:
-        msg_text = (
-            f"🚨🚨🚨 <b>ВНИМАНИЕ! НЕГАТИВНЫЙ ОТЗЫВ</b> 🚨🚨🚨\n"
-            f"<code>══════════════════════════════════</code>\n\n"
-            f"📍 <b>Пункт пропуска:</b> {checkpoint}\n"
-            f"👤 <b>Сотрудник:</b> {employee_name}\n"
-            f"💬 <b>Отзыв:</b> <i>«{comment}»</i>\n\n"
-            f"📊 <b>Анализ:</b>\n"
-            f"🔴 <b>Оценка:</b> {stars_str} ({rating}/5)\n"
-            f"🎭 <b>Тональность:</b> {sentiment}\n\n"
-            f"<code>⚠️ ТРЕБУЕТСЯ РЕАГИРОВАНИЕ РУКОВОДСТВА!</code>\n"
-            f"<code>══════════════════════════════════</code>"
-        )
-    else:
-        msg_text = (
-            f"📝 <b>Новый отзыв о сотруднике</b>\n\n"
-            f"📍 <b>Пункт пропуска:</b> {checkpoint}\n"
-            f"👤 <b>Сотрудник:</b> {employee_name}\n"
-            f"💬 <b>Отзыв:</b> <i>«{comment}»</i>\n\n"
-            f"📊 <b>Анализ текста:</b>\n"
-            f"⭐ <b>Авто-оценка:</b> {stars_str} ({rating}/5)\n"
-            f"🎭 <b>Тональность:</b> {sentiment}"
-        )
+        .result-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--success-color);
+            margin-bottom: 12px;
+        }
 
-    send_telegram_message(msg_text)
+        .result-stars {
+            font-size: 28px;
+            color: var(--star-color);
+            margin-bottom: 8px;
+        }
 
-    return jsonify({
-        "success": True,
-        "message": "Оценка успешно отправлена!",
-        "rating": rating,
-        "sentiment": sentiment,
-        "word_count": word_count
-    })
+        .result-info {
+            font-size: 14px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
 
+        .alert-error {
+            display: none;
+            padding: 14px;
+            border-radius: 8px;
+            margin-top: 15px;
+            background-color: rgba(239, 68, 68, 0.15);
+            border: 1px solid var(--error-color);
+            color: var(--error-color);
+            font-size: 14px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
 
-@app.route("/webhook", methods=["POST"])
-def telegram_webhook():
-    data = request.get_json() or {}
-    if "message" in data:
-        chat_id = data["message"]["chat"]["id"]
-        text = data["message"].get("text", "")
-        if text.startswith("/"):
-            command = text.split()[0]
-            process_telegram_command(command, chat_id)
-    return jsonify({"status": "ok"}), 200
+<div class="container">
+    <div class="header">
+        <h1>Оценка сотрудников</h1>
+        <p>Выберите способ заполнения отзыва</p>
+    </div>
 
+    <div class="tab-buttons">
+        <button type="button" class="tab-btn active" onclick="switchTab('manual')">✍️ Свой текст</button>
+        <button type="button" class="tab-btn" onclick="switchTab('templates')">📋 Шаблоны</button>
+    </div>
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    <form id="ratingForm">
+        <div class="form-group">
+            <label for="checkpoint">Пункт пропуска *</label>
+            <input type="text" id="checkpoint" placeholder="Например: КПП №1" required>
+        </div>
+
+        <div class="form-group">
+            <label for="employee_name">ФИО сотрудника *</label>
+            <input type="text" id="employee_name" placeholder="Например: Иванов И.И." required>
+        </div>
+
+        <div id="tab-manual" class="tab-content active">
+            <div class="form-group">
+                <label for="comment">Текст отзыва вручную *</label>
+                <textarea id="comment" placeholder="Напишите ваш отзыв о работе сотрудника..."></textarea>
+            </div>
+        </div>
+
+        <div id="tab-templates" class="tab-content">
+            <div class="form-group">
+                <label>Выберите готовый шаблон:</label>
+                <div class="presets-list">
+                    <div class="preset-card" onclick="selectTemplate('Сотрудник работал отлично, вежливо и очень быстро. Большое спасибо!')">
+                        <div class="preset-tag pos">🟢 ПОЛОЖИТЕЛЬНЫЙ</div>
+                        <div class="preset-text">«Сотрудник работал отлично, вежливо и очень быстро. Большое спасибо!»</div>
+                    </div>
+
+                    <div class="preset-card" onclick="selectTemplate('Проверка прошла корректно и аккуратно. Замечаний и претензий нет.')">
+                        <div class="preset-tag neu">🟡 НЕЙТРАЛЬНЫЙ</div>
+                        <div class="preset-text">«Проверка прошла корректно и аккуратно. Замечаний и претензий нет.»</div>
+                    </div>
+
+                    <div class="preset-card" onclick="selectTemplate('Сотрудник работал очень медленно, допустил ошибку и общался грубо.')">
+                        <div class="preset-tag neg">🔴 ОТРИЦАТЕЛЬНЫЙ</div>
+                        <div class="preset-text">«Сотрудник работал очень медленно, допустил ошибку и общался грубо.»</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="btn-submit" id="submitBtn">Отправить и проанализировать</button>
+    </form>
+
+    <div id="alertError" class="alert-error"></div>
+
+    <div id="resultBox" class="result-box">
+        <div class="result-title" id="resultMessage"></div>
+        <div class="result-stars" id="resultStars"></div>
+        <div class="result-info" id="resultDetails"></div>
+    </div>
+</div>
+
+<script>
+    function switchTab(tabName) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+        if (tabName === 'manual') {
+            document.querySelectorAll('.tab-btn')[0].classList.add('active');
+            document.getElementById('tab-manual').classList.add('active');
+        } else {
+            document.querySelectorAll('.tab-btn')[1].classList.add('active');
+            document.getElementById('tab-templates').classList.add('active');
+        }
+    }
+
+    function selectTemplate(text) {
+        document.getElementById('comment').value = text;
+        switchTab('manual');
+        document.getElementById('comment').focus();
+    }
+
+    const form = document.getElementById('ratingForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const alertError = document.getElementById('alertError');
+    const resultBox = document.getElementById('resultBox');
+
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        alertError.style.display = 'none';
+        resultBox.style.display = 'none';
+
+        const checkpoint = document.getElementById('checkpoint').value.trim();
+        const employeeName = document.getElementById('employee_name').value.trim();
+        const comment = document.getElementById('comment').value.trim();
+
+        if (!checkpoint || !employeeName || !comment) {
+            showError('Пожалуйста, заполните все поля!');
+            return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.innerText = 'Отправка...';
+
+        try {
+            const response = await fetch('/api/rate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    checkpoint: checkpoint,
+                    employee_name: employeeName,
+                    comment: comment
+                })
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                form.style.display = 'none';
+                document.querySelector('.tab-buttons').style.display = 'none';
+                
+                document.getElementById('resultMessage').innerText = result.message;
+                document.getElementById('resultStars').innerText = '★'.repeat(result.rating) + '☆'.repeat(5 - result.rating);
+                document.getElementById('resultDetails').innerHTML = `
+                    Автоматическая оценка: <b>${result.rating} из 5</b><br>
+                    Тональность: <b>${result.sentiment}</b><br>
+                    Количество слов: <b>${result.word_count}</b>
+                `;
+                
+                resultBox.style.display = 'block';
+            } else {
+                showError(result.message || 'Ошибка обработки.');
+                submitBtn.disabled = false;
+                submitBtn.innerText = 'Отправить и проанализировать';
+            }
+        } catch (err) {
+            showError('Ошибка связи с сервером.');
+            submitBtn.disabled = false;
+            submitBtn.innerText = 'Отправить и проанализировать';
+        }
+    });
+
+    function showError(msg) {
+        alertError.innerText = msg;
+        alertError.style.display = 'block';
+    }
+</script>
+
+</body>
+</html>
