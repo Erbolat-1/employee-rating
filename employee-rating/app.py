@@ -8,38 +8,33 @@ from flask import Flask, jsonify, render_template, request
 app = Flask(__name__)
 DATABASE = "ratings.db"
 
-# Словари ключевых слов для текстового анализа
+# Словари ключевых слов для автоматического определения балла по тексту
 POSITIVE_WORDS = {
     "отлично", "замечательно", "быстро", "вежливо", "профессионально",
     "качественно", "спасибо", "благодарность", "корректно", "чисто",
     "удобно", "прекрасно", "хорошо", "компетентно", "оперативно", "молодец",
-    "вежливый", "быстрый", "отличный", "профессионал", "вежливость"
+    "вежливый", "быстрый", "отличный", "профессионал", "вежливость", "образцово"
 }
 
 NEGATIVE_WORDS = {
     "плохо", "медленно", "грубо", "ужасно", "хамство", "ошибка",
     "очередь", "долго", "невнимательно", "превышение", "халатность",
     "претензия", "задержка", "проблема", "бардак", "грязь", "отвратительно",
-    "грубый", "медлительный", "хам", "ужасный", "плохой"
+    "грубый", "медлительный", "хам", "ужасный", "плохой", "грубость"
 }
 
 
 def analyze_text(text: str) -> dict:
-    """Анализирует текст и возвращает тональность, число слов и балл от 1 до 5."""
+    """Анализирует текст и рассчитывает оценку от 1 до 5."""
     if not text or not text.strip():
-        return {
-            "score": 3,
-            "sentiment": "Нейтральный",
-            "word_count": 0
-        }
+        return {"score": 3, "sentiment": "Нейтральный", "word_count": 0}
 
     clean_text = text.lower()
     words = re.findall(r'\b[а-яа-яa-z0-9]+\b', clean_text)
-    
+
     pos_count = sum(1 for w in words if w in POSITIVE_WORDS)
     neg_count = sum(1 for w in words if w in NEGATIVE_WORDS)
 
-    # Расчет тональности и оценки от 1 до 5
     if pos_count > neg_count:
         sentiment = "Положительный"
         score = 5 if (pos_count - neg_count) >= 2 else 4
@@ -50,11 +45,7 @@ def analyze_text(text: str) -> dict:
         sentiment = "Нейтральный"
         score = 3
 
-    return {
-        "score": score,
-        "sentiment": sentiment,
-        "word_count": len(words)
-    }
+    return {"score": score, "sentiment": sentiment, "word_count": len(words)}
 
 
 def get_db():
@@ -112,14 +103,14 @@ def process_telegram_command(command: str, chat_id: str):
 
     if command == "/start":
         text = (
-            "👋 <b>Добро пожаловать в систему автоматической оценки сотрудников!</b>\n\n"
-            "Доступные команды:\n"
-            "/report — отчет по оценкам\n"
+            "👋 <b>Система оценки сотрудников по тексту</b>\n\n"
+            "Команды:\n"
+            "/report — статистика оценок\n"
             "/last — последние 10 отзывов\n"
-            "/chatid — узнать ID текущего чата"
+            "/chatid — ID текущего чата"
         )
     elif command == "/chatid":
-        text = f"🆔 <b>ID этого чата:</b> <code>{chat_id}</code>"
+        text = f"🆔 <b>ID чата:</b> <code>{chat_id}</code>"
     elif command == "/report":
         with get_db() as conn:
             cursor = conn.cursor()
@@ -128,8 +119,8 @@ def process_telegram_command(command: str, chat_id: str):
 
         avg_val = round(avg_rating, 2) if avg_rating else 0.0
         text = (
-            f"📊 <b>Отчет по оценкам отзывов:</b>\n\n"
-            f"• Всего отзывов проанализировано: <b>{count}</b>\n"
+            f"📊 <b>Отчет по оценкам:</b>\n\n"
+            f"• Всего отзывов: <b>{count}</b>\n"
             f"• Средний балл: <b>{avg_val} / 5 ⭐</b>"
         )
     elif command == "/last":
@@ -150,7 +141,7 @@ def process_telegram_command(command: str, chat_id: str):
                     f"📍 <b>Пункт:</b> {r['checkpoint']}\n"
                     f"👤 <b>Сотрудник:</b> {r['employee_name']}\n"
                     f"💬 <b>Текст:</b> <i>«{r['comment']}»</i>\n"
-                    f"⭐ <b>Рассчитанная оценка:</b> {stars} ({r['rating']}/5)\n"
+                    f"⭐ <b>Оценка:</b> {stars} ({r['rating']}/5)\n"
                     f"🎭 <b>Тональность:</b> {r['sentiment']}\n"
                     f"🕒 <b>Дата:</b> {r['created_at']}\n"
                     f"------------------------------\n"
@@ -164,7 +155,7 @@ def process_telegram_command(command: str, chat_id: str):
         req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/x-www-form-urlencoded"})
         urllib.request.urlopen(req, timeout=5)
     except Exception as e:
-        print(f"Error answering Telegram command: {e}")
+        print(f"Error Telegram command: {e}")
 
 
 @app.route("/")
@@ -181,9 +172,8 @@ def add_rating():
     comment = data.get("comment", "").strip()
 
     if not checkpoint or not employee_name or not comment:
-        return jsonify({"success": False, "message": "Заполните все поля, включая текст отзыва!"}), 400
+        return jsonify({"success": False, "message": "Заполните все обязательные поля!"}), 400
 
-    # Автоматическая оценка текста
     analysis = analyze_text(comment)
     rating = analysis["score"]
     sentiment = analysis["sentiment"]
@@ -197,24 +187,22 @@ def add_rating():
         )
         conn.commit()
 
-    # Отправка в Telegram
     stars_str = "⭐" * rating
     msg_text = (
-        f"📝 <b>Новая текстовая оценка сотрудника!</b>\n\n"
+        f"📝 <b>Новый отзыв о сотруднике!</b>\n\n"
         f"📍 <b>Пункт пропуска:</b> {checkpoint}\n"
         f"👤 <b>Сотрудник:</b> {employee_name}\n"
-        f"💬 <b>Текст отзыва:</b> <i>«{comment}»</i>\n\n"
-        f"📊 <b>Результат анализа:</b>\n"
-        f"⭐ <b>Рассчитанный балл:</b> {stars_str} ({rating}/5)\n"
-        f"🎭 <b>Тональность:</b> {sentiment}\n"
-        f"📏 <b>Слов в тексте:</b> {word_count}"
+        f"💬 <b>Отзыв:</b> <i>«{comment}»</i>\n\n"
+        f"📊 <b>Анализ текста:</b>\n"
+        f"⭐ <b>Авто-оценка:</b> {stars_str} ({rating}/5)\n"
+        f"🎭 <b>Тональность:</b> {sentiment}"
     )
 
     send_telegram_message(msg_text)
 
     return jsonify({
         "success": True,
-        "message": "Спасибо! Ваш отзыв проанализирован и оценка сохранена.",
+        "message": "Оценка успешно отправлена!",
         "rating": rating,
         "sentiment": sentiment,
         "word_count": word_count
