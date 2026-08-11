@@ -1,662 +1,191 @@
 import os
 import sqlite3
-import threading
-import time
-
-import requests
-import telebot
-
-from flask import Flask, request, jsonify, render_template_string
-from flask_cors import CORS
-
-
-# =========================================================
-# НАСТРОЙКИ
-# =========================================================
+import urllib.parse
+import urllib.request
+from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
-CORS(app)
 
-BOT_TOKEN = os.getenv(
-    "BOT_TOKEN",
-    "8606610454:AAG6wYBzLBI0ETLojTWx7dORnbRTRUBUQOo"
-)
-
-# На Render лучше указывать переменную окружения API_URL
-API_URL = os.getenv(
-    "API_URL",
-    "https://employee-rating-1.onrender.com/api/ratings"
-)
-
-CHAT_ID = os.getenv("CHAT_ID")
-
-BASE_DIR = os.path.dirname(
-    os.path.abspath(__file__)
-)
-
-DB_PATH = os.path.join(
-    BASE_DIR,
-    "ratings.db"
-)
+DATABASE = "ratings.db"
 
 
-# =========================================================
-# TELEGRAM
-# =========================================================
-
-bot = None
-
-if BOT_TOKEN and BOT_TOKEN != "8606610454:AAG6wYBzLBI0ETLojTWx7dORnbRTRUBUQOo":
-    bot = telebot.TeleBot(BOT_TOKEN)
+def get_db():
+    """Возвращает соединение с базой данных SQLite."""
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
-# =========================================================
-# БАЗА ДАННЫХ
-# =========================================================
-
-def init_database():
-
-    connection = sqlite3.connect(DB_PATH)
-
-    cursor = connection.cursor()
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS ratings (
-
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-            checkpoint TEXT NOT NULL,
-
-            employee TEXT NOT NULL,
-
-            rating INTEGER NOT NULL,
-
-            comment TEXT,
-
-            created_at TEXT NOT NULL
-
+def init_db():
+    """Автоматически создает таблицу в SQLite при старте приложения."""
+    with get_db() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ratings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                checkpoint TEXT NOT NULL,
+                employee_name TEXT NOT NULL,
+                rating INTEGER NOT NULL,
+                comment TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """
         )
-    """)
+        conn.commit()
 
-    connection.commit()
-    connection.close()
 
+# Инициализируем БД при загрузке модулей
+init_db()
+
+
+def send_telegram_message(text: str) -> bool:
+    """Отправляет уведомление в Telegram-чат через Bot API."""
+    token = os.environ.get("BOT_TOKEN")
+    chat_id = os.environ.get("CHAT_ID")
+
+    if not token or not chat_id:
+        print("Telegram BOT_TOKEN or CHAT_ID is not configured in environment variables.")
+        return False
+
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = urllib.parse.urlencode({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode("utf-8")
+
+    try:
+        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/x-www-form-urlencoded"})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            return response.status == 200
+    except Exception as e:
+        print(f"Error sending Telegram message: {e}")
+        return False
+
+
+def process_telegram_command(command: str, chat_id: str):
+    """Обработка команд Telegram-бота (/start, /report, /last, /chatid)."""
+    token = os.environ.get("BOT_TOKEN")
+    if not token:
+        return
+
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+
+    if command == "/start":
+        text = (
+            "👋 <b>Добро пожаловать в бота системы 'Оценка сотрудников'!</b>\n\n"
+            "Доступные команды:\n"
+            "/report — статистика оценок\n"
+            "/last — последние 10 оценок\n"
+            "/chatid — узнать ID текущего чата"
+        )
+    elif command == "/chatid":
+        text = f"🆔 <b>ID этого чата:</b> <code>{chat_id}</code>"
+    elif command == "/report":
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*), AVG(rating) FROM ratings")
+            count, avg_rating = cursor.fetchone()
+
+        avg_val = round(avg_rating, 2) if avg_rating else 0.0
+        text = (
+            f"📊 <b>Отчет по оценкам:</b>\n\n"
+            f"• Всего оценок: <b>{count}</b>\n"
+            f"• Средняя оценка: <b>{avg_val} / 5 ⭐</b>"
+        )
+    elif command == "/last":
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT checkpoint, employee_name, rating, comment, created_at FROM ratings ORDER BY id DESC LIMIT 10"
+            )
+            rows = cursor.fetchall()
+
+        if not rows:
+            text = "ℹ️ Оценок пока нет."
+        else:
+            text = "📋 <b>Последние 10 оценок:</b>\n\n"
+            for r in rows:
+                stars = "⭐" * r["rating"]
+                comment_text = f"\n💬 <i>{r['comment']}</i>" if r["comment"] else ""
+                text += (
+                    f"📍 <b>Пункт:</b> {r['checkpoint']}\n"
+                    f"👤 <b>Сотрудник:</b> {r['employee_name']}\n"
+                    f"⭐ <b>Оценка:</b> {stars} ({r['rating']}/5)\n"
+                    f"🕒 <b>Дата:</b> {r['created_at']}{comment_text}\n"
+                    f"------------------------------\n"
+                )
+    else:
+        text = "❓ Неизвестная команда. Используйте /start для списка команд."
+
+    payload = urllib.parse.urlencode({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode("utf-8")
+    try:
+        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/x-www-form-urlencoded"})
+        urllib.request.urlopen(req, timeout=5)
+    except Exception as e:
+        print(f"Error answering Telegram command: {e}")
 
 
 @app.route("/")
-def home():
-
-    return render_template_string(HTML)
-
-
-# =========================================================
-# СОХРАНЕНИЕ ОЦЕНКИ
-# =========================================================
-
-@app.route(
-    "/api/rating",
-    methods=["POST"]
-)
-def receive_rating():
-
-    data = request.get_json()
-
-    if not data:
-
-        return jsonify({
-            "success": False,
-            "message": "Нет данных"
-        }), 400
+def index():
+    """Отображает главную страницу с формой оценки."""
+    return render_template("index.html")
 
 
-    checkpoint = str(
-        data.get("checkpoint", "")
-    ).strip()
+@app.route("/api/rate", methods=["POST"])
+def add_rating():
+    """Обрабатывает отправку оценки из веб-формы."""
+    data = request.get_json() or {}
 
+    checkpoint = data.get("checkpoint", "").strip()
+    employee_name = data.get("employee_name", "").strip()
+    rating = data.get("rating")
+    comment = data.get("comment", "").strip()
 
-    employee = str(
-        data.get("employee", "")
-    ).strip()
-
-
-    comment = str(
-        data.get("comment", "")
-    ).strip()
-
+    if not checkpoint or not employee_name or not rating:
+        return jsonify({"success": False, "message": "Заполните все обязательные поля!"}), 400
 
     try:
+        rating = int(rating)
+        if rating < 1 or rating > 5:
+            raise ValueError()
+    except ValueError:
+        return jsonify({"success": False, "message": "Некорректное значение оценки (от 1 до 5)."}), 400
 
-        rating = int(
-            data.get("rating")
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO ratings (checkpoint, employee_name, rating, comment) VALUES (?, ?, ?, ?)",
+            (checkpoint, employee_name, rating, comment),
         )
+        conn.commit()
 
-    except (TypeError, ValueError):
-
-        return jsonify({
-            "success": False,
-            "message": "Некорректная оценка"
-        }), 400
-
-
-    if not checkpoint:
-
-        return jsonify({
-            "success": False,
-            "message":
-                "Не указан пункт пропуска"
-        }), 400
-
-
-    if not employee:
-
-        return jsonify({
-            "success": False,
-            "message":
-                "Не указано ФИО"
-        }), 400
-
-
-    if rating < 1 or rating > 5:
-
-        return jsonify({
-            "success": False,
-            "message":
-                "Оценка должна быть от 1 до 5"
-        }), 400
-
-
-    from datetime import datetime
-
-    created_at = datetime.now().strftime(
-        "%Y-%m-%d %H:%M:%S"
+    # Отправка в Telegram
+    stars_str = "⭐" * rating
+    msg_text = (
+        f"🚨 <b>Новая оценка сотрудника!</b>\n\n"
+        f"📍 <b>Пункт пропуска:</b> {checkpoint}\n"
+        f"👤 <b>Сотрудник:</b> {employee_name}\n"
+        f"⭐ <b>Оценка:</b> {stars_str} ({rating}/5)\n"
     )
+    if comment:
+        msg_text += f"💬 <b>Комментарий:</b> {comment}"
 
+    send_telegram_message(msg_text)
 
-    connection = sqlite3.connect(
-        DB_PATH
-    )
+    return jsonify({"success": True, "message": "Спасибо за оценку! Ваша оценка успешно отправлена."})
 
-    cursor = connection.cursor()
 
+@app.route("/webhook", methods=["POST"])
+def telegram_webhook():
+    """Принимает Webhook от Telegram Bot API для обработки команд."""
+    data = request.get_json() or {}
+    if "message" in data:
+        chat_id = data["message"]["chat"]["id"]
+        text = data["message"].get("text", "")
 
-    cursor.execute("""
-        INSERT INTO ratings
-        (
-            checkpoint,
-            employee,
-            rating,
-            comment,
-            created_at
-        )
+        if text.startswith("/"):
+            command = text.split()[0]
+            process_telegram_command(command, chat_id)
 
-        VALUES (?, ?, ?, ?, ?)
-    """, (
-        checkpoint,
-        employee,
-        rating,
-        comment,
-        created_at
-    ))
-
-
-    rating_id = cursor.lastrowid
-
-    connection.commit()
-
-    connection.close()
-
-
-    print(
-        "Новая оценка:",
-        rating_id
-    )
-
-
-    # Отправляем новую оценку в Telegram
-    send_rating_to_telegram(
-        rating_id,
-        checkpoint,
-        employee,
-        rating,
-        comment,
-        created_at
-    )
-
-
-    return jsonify({
-
-        "success": True,
-
-        "message":
-            "Оценка сохранена",
-
-        "id":
-            rating_id,
-
-        "created_at":
-            created_at
-
-    })
-
-
-# =========================================================
-# TELEGRAM — ОТПРАВКА НОВОЙ ОЦЕНКИ
-# =========================================================
-
-def send_rating_to_telegram(
-    rating_id,
-    checkpoint,
-    employee,
-    rating,
-    comment,
-    created_at
-):
-
-    if not bot:
-
-        print(
-            "Telegram бот не настроен"
-        )
-
-        return
-
-
-    if not CHAT_ID:
-
-        print(
-            "CHAT_ID не настроен"
-        )
-
-        return
-
-
-    stars = "⭐" * rating
-
-
-    text = (
-
-        "📝 НОВАЯ ОЦЕНКА\n\n"
-
-        f"🆔 ID: {rating_id}\n\n"
-
-        f"📍 Пункт пропуска:\n"
-        f"{checkpoint}\n\n"
-
-        f"👤 Сотрудник:\n"
-        f"{employee}\n\n"
-
-        f"⭐ Оценка:\n"
-        f"{stars} ({rating}/5)\n\n"
-
-        f"💬 Комментарий:\n"
-        f"{comment or 'Без комментария'}\n\n"
-
-        f"🕐 Дата:\n"
-        f"{created_at}"
-
-    )
-
-
-    try:
-
-        bot.send_message(
-            int(CHAT_ID),
-            text
-        )
-
-        print(
-            "Оценка отправлена в Telegram"
-        )
-
-    except Exception as error:
-
-        print(
-            "Ошибка Telegram:",
-            error
-        )
-
-
-# =========================================================
-# API — ВСЕ ОЦЕНКИ
-# =========================================================
-
-@app.route(
-    "/api/ratings",
-    methods=["GET"]
-)
-def get_ratings():
-
-    connection = sqlite3.connect(
-        DB_PATH
-    )
-
-    connection.row_factory = sqlite3.Row
-
-    cursor = connection.cursor()
-
-
-    cursor.execute("""
-        SELECT
-            id,
-            checkpoint,
-            employee,
-            rating,
-            comment,
-            created_at
-
-        FROM ratings
-
-        ORDER BY id DESC
-    """)
-
-
-    rows = cursor.fetchall()
-
-    connection.close()
-
-
-    ratings = []
-
-
-    for row in rows:
-
-        ratings.append({
-
-            "id":
-                row["id"],
-
-            "checkpoint":
-                row["checkpoint"],
-
-            "employee":
-                row["employee"],
-
-            "rating":
-                row["rating"],
-
-            "comment":
-                row["comment"],
-
-            "created_at":
-                row["created_at"]
-
-        })
-
-
-    return jsonify({
-
-        "success": True,
-
-        "count":
-            len(ratings),
-
-        "ratings":
-            ratings
-
-    })
-
-
-# =========================================================
-# TELEGRAM КОМАНДЫ
-# =========================================================
-
-if bot:
-
-    @bot.message_handler(
-        commands=["start"]
-    )
-    def start(message):
-
-        bot.send_message(
-
-            message.chat.id,
-
-            "🤖 Система оценки сотрудников\n\n"
-
-            "/report — общий отчёт\n"
-            "/last — последние оценки\n"
-            "/chatid — узнать Chat ID"
-
-        )
-
-
-    @bot.message_handler(
-        commands=["chatid"]
-    )
-    def chatid(message):
-
-        bot.send_message(
-
-            message.chat.id,
-
-            f"🆔 Ваш Chat ID:\n"
-            f"{message.chat.id}"
-
-        )
-
-
-    @bot.message_handler(
-        commands=["report"]
-    )
-    def report(message):
-
-        connection = sqlite3.connect(
-            DB_PATH
-        )
-
-        cursor = connection.cursor()
-
-
-        cursor.execute("""
-            SELECT
-                COUNT(*),
-                AVG(rating)
-
-            FROM ratings
-        """)
-
-
-        total, average = cursor.fetchone()
-
-        connection.close()
-
-
-        if total == 0:
-
-            bot.send_message(
-                message.chat.id,
-                "📊 Оценок пока нет."
-            )
-
-            return
-
-
-        text = (
-
-            "📊 ОБЩИЙ ОТЧЁТ\n\n"
-
-            f"📝 Всего оценок: "
-            f"{total}\n\n"
-
-            f"⭐ Средняя оценка: "
-            f"{average:.2f} / 5"
-
-        )
-
-
-        bot.send_message(
-            message.chat.id,
-            text
-        )
-
-
-    @bot.message_handler(
-        commands=["last"]
-    )
-    def last_ratings(message):
-
-        connection = sqlite3.connect(
-            DB_PATH
-        )
-
-        cursor = connection.cursor()
-
-
-        cursor.execute("""
-            SELECT
-                checkpoint,
-                employee,
-                rating,
-                comment,
-                created_at
-
-            FROM ratings
-
-            ORDER BY id DESC
-
-            LIMIT 10
-        """)
-
-
-        rows = cursor.fetchall()
-
-        connection.close()
-
-
-        if not rows:
-
-            bot.send_message(
-                message.chat.id,
-                "📊 Оценок пока нет."
-            )
-
-            return
-
-
-        text = (
-            "📋 ПОСЛЕДНИЕ ОЦЕНКИ\n\n"
-        )
-
-
-        for row in rows:
-
-            checkpoint = row[0]
-            employee = row[1]
-            rating = row[2]
-            comment = row[3]
-            created_at = row[4]
-
-
-            text += (
-
-                f"📍 {checkpoint}\n"
-
-                f"👤 {employee}\n"
-
-                f"⭐ {rating}/5\n"
-
-                f"💬 "
-                f"{comment or 'Без комментария'}\n"
-
-                f"🕐 {created_at}\n"
-
-                "──────────────\n"
-
-            )
-
-
-        bot.send_message(
-            message.chat.id,
-            text
-        )
-
-
-# =========================================================
-# TELEGRAM POLLING
-# =========================================================
-
-def start_telegram():
-
-    if not bot:
-
-        print(
-            "Telegram отключен: "
-            "BOT_TOKEN не задан"
-        )
-
-        return
-
-
-    print(
-        "Telegram бот запущен"
-    )
-
-
-    try:
-
-        bot.infinity_polling(
-            skip_pending=True
-        )
-
-    except Exception as error:
-
-        print(
-            "Ошибка Telegram:",
-            error
-        )
-
-
-# =========================================================
-# ЗАПУСК
-# =========================================================
-
-init_database()
+    return jsonify({"status": "ok"}), 200
 
 
 if __name__ == "__main__":
-
-    if bot:
-
-        telegram_thread = threading.Thread(
-            target=start_telegram,
-            daemon=True
-        )
-
-        telegram_thread.start()
-
-
-    port = int(
-        os.environ.get(
-            "PORT",
-            5000
-        )
-    )
-
-
-    print(
-        "=============================="
-    )
-
-    print(
-        "СИСТЕМА ОЦЕНКИ СОТРУДНИКОВ"
-    )
-
-    print(
-        "=============================="
-    )
-
-    print(
-        "Порт:",
-        port
-    )
-
-    print(
-        "=============================="
-    )
-
-
-    app.run(
-        host="0.0.0.0",
-        port=port,
-        debug=False
-    )
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
