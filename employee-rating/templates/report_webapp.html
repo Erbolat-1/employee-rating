@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Отчет по оценкам</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            background-color: var(--tg-theme-bg-color, #0f172a);
+            color: var(--tg-theme-text-color, #f8fafc);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            padding: 12px;
+            margin: 0;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 16px;
+        }
+
+        .header h2 {
+            font-size: 18px;
+            margin-bottom: 4px;
+        }
+
+        .header p {
+            font-size: 12px;
+            color: var(--tg-theme-hint-color, #94a3b8);
+        }
+
+        .card {
+            background-color: var(--tg-theme-secondary-bg-color, #1e293b);
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .checkpoint {
+            font-weight: 700;
+            font-size: 14px;
+            color: var(--tg-theme-link-color, #38bdf8);
+        }
+
+        .rating {
+            color: #f59e0b;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .employee {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .comment {
+            font-size: 12px;
+            font-style: italic;
+            opacity: 0.9;
+            margin-bottom: 6px;
+            line-height: 1.3;
+        }
+
+        .footer-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--tg-theme-hint-color, #94a3b8);
+        }
+
+        .badge {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        .badge-pos { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .badge-neu { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        .badge-neg { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h2>📊 Отчет по оценкам</h2>
+    <p>Всего записей: {{ ratings|length }}</p>
+</div>
+
+{% for item in ratings %}
+<div class="card">
+    <div class="card-header">
+        <span class="checkpoint">📍 {{ item.checkpoint }}</span>
+        <span class="rating">★ {{ item.rating }}/5</span>
+    </div>
+    <div class="employee">👤 {{ item.employee_name }}</div>
+    <div class="comment">«{{ item.comment }}»</div>
+    <div class="footer-info">
+        <span>🕒 {{ item.created_at }}</span>
+        {% if item.rating >= 4 %}
+            <span class="badge badge-pos">{{ item.sentiment }}</span>
+        {% elif item.rating == 3 %}
+            <span class="badge badge-neu">{{ item.sentiment }}</span>
+        {% else %}
+            <span class="badge badge-neg">{{ item.sentiment }}</span>
+        {% endif %}
+    </div>
+</div>
+{% else %}
+<p style="text-align: center; color: var(--tg-theme-hint-color);">Записей пока нет.</p>
+{% endfor %}
+
+<script>
+    window.Telegram.WebApp.ready();
+    window.Telegram.WebApp.expand();
+</script>
+
+</body>
+</html>
