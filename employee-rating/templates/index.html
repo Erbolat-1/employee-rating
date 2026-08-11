@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Оценка сотрудников по тексту</title>
+    <title>Оценка сотрудников</title>
     <style>
         :root {
             --bg-color: #0f172a;
@@ -38,7 +38,7 @@
 
         .container {
             width: 100%;
-            max-width: 500px;
+            max-width: 520px;
             background-color: var(--card-bg);
             border: 1px solid var(--border-color);
             border-radius: 16px;
@@ -48,13 +48,13 @@
 
         .header {
             text-align: center;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
         }
 
         .header h1 {
             font-size: 22px;
             font-weight: 700;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
 
         .header p {
@@ -62,8 +62,44 @@
             color: var(--text-muted);
         }
 
-        .form-group {
+        /* Переключатель вкладок */
+        .tab-buttons {
+            display: flex;
+            background-color: var(--bg-color);
+            border-radius: 10px;
+            padding: 4px;
             margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn.active {
+            background-color: var(--accent-color);
+            color: #ffffff;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 18px;
         }
 
         label {
@@ -91,38 +127,44 @@
 
         textarea {
             resize: vertical;
-            min-height: 110px;
+            min-height: 120px;
         }
 
-        /* Быстрые шаблоны примеров */
-        .examples-title {
-            font-size: 13px;
-            color: var(--text-muted);
-            margin-bottom: 8px;
-        }
-
+        /* Список шаблонов во вкладке */
         .presets-list {
             display: flex;
             flex-direction: column;
-            gap: 8px;
-            margin-bottom: 12px;
+            gap: 10px;
         }
 
-        .preset-btn {
-            background-color: var(--chip-bg);
-            color: var(--text-main);
+        .preset-card {
+            background-color: var(--bg-color);
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            padding: 8px 12px;
-            font-size: 13px;
-            text-align: left;
+            padding: 12px;
             cursor: pointer;
-            transition: background 0.2s ease, border-color 0.2s ease;
+            transition: border-color 0.2s ease, background 0.2s ease;
         }
 
-        .preset-btn:hover {
-            background-color: #475569;
+        .preset-card:hover {
             border-color: var(--accent-color);
+            background-color: #1e293b;
+        }
+
+        .preset-tag {
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .preset-tag.pos { color: #10b981; }
+        .preset-tag.neu { color: #f59e0b; }
+        .preset-tag.neg { color: #ef4444; }
+
+        .preset-text {
+            font-size: 13px;
+            color: var(--text-main);
+            line-height: 1.4;
         }
 
         .btn-submit {
@@ -136,6 +178,7 @@
             font-weight: 600;
             cursor: pointer;
             transition: background-color 0.2s ease;
+            margin-top: 10px;
         }
 
         .btn-submit:hover {
@@ -193,39 +236,57 @@
 
 <div class="container">
     <div class="header">
-        <h1>Оценка сотрудников по тексту</h1>
-        <p>Выберите готовый пример или напишите свой отзыв вручную</p>
+        <h1>Оценка сотрудников</h1>
+        <p>Выберите способ заполнения отзыва</p>
+    </div>
+
+    <!-- Вкладки -->
+    <div class="tab-buttons">
+        <button type="button" class="tab-btn active" onclick="switchTab('manual')">✍️ Свой текст</button>
+        <button type="button" class="tab-btn" onclick="switchTab('templates')">📋 Шаблоны</button>
     </div>
 
     <form id="ratingForm">
+        <!-- Общие обязательные поля -->
         <div class="form-group">
             <label for="checkpoint">Пункт пропуска *</label>
-            <input type="text" id="checkpoint" placeholder="КПП №1" required>
+            <input type="text" id="checkpoint" placeholder="Например: КПП №1" required>
         </div>
 
         <div class="form-group">
             <label for="employee_name">ФИО сотрудника *</label>
-            <input type="text" id="employee_name" placeholder="Иванов И.И." required>
+            <input type="text" id="employee_name" placeholder="Например: Иванов И.И." required>
         </div>
 
-        <div class="form-group">
-            <label>Примеры отзывов (кликните для подстановки):</label>
-            <div class="presets-list">
-                <button type="button" class="preset-btn" onclick="setPreset('Сотрудник работал отлично, вежливо и очень быстро. Большое спасибо!')">
-                    🟢 <b>Положительный:</b> «Отлично, вежливо и очень быстро...»
-                </button>
-                <button type="button" class="preset-btn" onclick="setPreset('Проверка прошла корректно и аккуратно. Замечаний нет.')">
-                    🟡 <b>Нейтральный:</b> «Проверка прошла корректно, замечаний нет.»
-                </button>
-                <button type="button" class="preset-btn" onclick="setPreset('Сотрудник работал очень медленно, допустил ошибку и общался грубо.')">
-                    🔴 <b>Отрицательный:</b> «Работал медленно, ошибка и грубость...»
-                </button>
+        <!-- Вкладка 1: Ручной ввод -->
+        <div id="tab-manual" class="tab-content active">
+            <div class="form-group">
+                <label for="comment">Текст отзыва вручную *</label>
+                <textarea id="comment" placeholder="Напишите ваш отзыв о работе сотрудника..."></textarea>
             </div>
         </div>
 
-        <div class="form-group">
-            <label for="comment">Текст отзыва для отправки *</label>
-            <textarea id="comment" placeholder="Выберите пример выше или введите текст вручную..." required></textarea>
+        <!-- Вкладка 2: Выбор готовых шаблонов -->
+        <div id="tab-templates" class="tab-content">
+            <div class="form-group">
+                <label>Выберите готовый вариант отзыва:</label>
+                <div class="presets-list">
+                    <div class="preset-card" onclick="selectTemplate('Сотрудник работал отлично, вежливо и очень быстро. Большое спасибо!')">
+                        <div class="preset-tag pos">🟢 ПОЛОЖИТЕЛЬНЫЙ</div>
+                        <div class="preset-text">«Сотрудник работал отлично, вежливо и очень быстро. Большое спасибо!»</div>
+                    </div>
+
+                    <div class="preset-card" onclick="selectTemplate('Проверка прошла корректно и аккуратно. Замечаний и претензий нет.')">
+                        <div class="preset-tag neu">🟡 НЕЙТРАЛЬНЫЙ</div>
+                        <div class="preset-text">«Проверка прошла корректно и аккуратно. Замечаний и претензий нет.»</div>
+                    </div>
+
+                    <div class="preset-card" onclick="selectTemplate('Сотрудник работал очень медленно, допустил ошибку и общался грубо.')">
+                        <div class="preset-tag neg">🔴 ОТРИЦАТЕЛЬНЫЙ</div>
+                        <div class="preset-text">«Сотрудник работал очень медленно, допустил ошибку и общался грубо.»</div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <button type="submit" class="btn-submit" id="submitBtn">Отправить и проанализировать</button>
@@ -241,17 +302,35 @@
 </div>
 
 <script>
+    let currentTab = 'manual';
+
+    // Функция переключения вкладок
+    function switchTab(tabName) {
+        currentTab = tabName;
+        
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+        if (tabName === 'manual') {
+            document.querySelectorAll('.tab-btn')[0].classList.add('active');
+            document.getElementById('tab-manual').classList.add('active');
+        } else {
+            document.querySelectorAll('.tab-btn')[1].classList.add('active');
+            document.getElementById('tab-templates').classList.add('active');
+        }
+    }
+
+    // Подстановка шаблона и переключение обратно в ввод для редактирования
+    function selectTemplate(text) {
+        document.getElementById('comment').value = text;
+        switchTab('manual');
+        document.getElementById('comment').focus();
+    }
+
     const form = document.getElementById('ratingForm');
     const submitBtn = document.getElementById('submitBtn');
     const alertError = document.getElementById('alertError');
     const resultBox = document.getElementById('resultBox');
-    const commentInput = document.getElementById('comment');
-
-    // Функция быстрых ответов/примеров
-    function setPreset(text) {
-        commentInput.value = text;
-        commentInput.focus();
-    }
 
     form.addEventListener('submit', async function(e) {
         e.preventDefault();
@@ -261,15 +340,15 @@
 
         const checkpoint = document.getElementById('checkpoint').value.trim();
         const employeeName = document.getElementById('employee_name').value.trim();
-        const comment = commentInput.value.trim();
+        const comment = document.getElementById('comment').value.trim();
 
         if (!checkpoint || !employeeName || !comment) {
-            showError('Заполните все поля!');
+            showError('Пожалуйста, введите текст отзыва или выберите шаблон!');
             return;
         }
 
         submitBtn.disabled = true;
-        submitBtn.innerText = 'Анализ и отправка...';
+        submitBtn.innerText = 'Отправка...';
 
         try {
             const response = await fetch('/api/rate', {
@@ -286,6 +365,7 @@
 
             if (response.ok && result.success) {
                 form.style.display = 'none';
+                document.querySelectorAll('.tab-buttons')[0].style.display = 'none';
                 
                 document.getElementById('resultMessage').innerText = result.message;
                 document.getElementById('resultStars').innerText = '★'.repeat(result.rating) + '☆'.repeat(5 - result.rating);
