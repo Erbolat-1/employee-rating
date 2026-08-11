@@ -10,8 +10,8 @@ load_dotenv()
 # НАСТРОЙКИ
 # ==========================================
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+BOT_TOKEN = os.getenv("8606610454:AAG6wYBzLBI0ETLojTWx7dORnbRTRUBUQOo")
+CHAT_ID = os.getenv("7421182406")
 
 API_URL = "https://employee-rating-1.onrender.com/api/ratings"
 
