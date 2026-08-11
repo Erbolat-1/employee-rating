@@ -2,11 +2,11 @@ import os
 import sqlite3
 import threading
 import time
-from datetime import datetime
 
 import requests
 import telebot
-from flask import Flask, request, jsonify, render_template
+
+from flask import Flask, request, jsonify, render_template_string
 from flask_cors import CORS
 
 
@@ -17,13 +17,27 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "ratings.db")
+BOT_TOKEN = os.getenv(
+    "BOT_TOKEN",
+    "8606610454:AAG6wYBzLBI0ETLojTWx7dORnbRTRUBUQOo"
+)
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+# На Render лучше указывать переменную окружения API_URL
+API_URL = os.getenv(
+    "API_URL",
+    "https://employee-rating-1.onrender.com/api/ratings"
+)
+
 CHAT_ID = os.getenv("CHAT_ID")
 
-PORT = int(os.getenv("PORT", 5000))
+BASE_DIR = os.path.dirname(
+    os.path.abspath(__file__)
+)
+
+DB_PATH = os.path.join(
+    BASE_DIR,
+    "ratings.db"
+)
 
 
 # =========================================================
@@ -32,40 +46,17 @@ PORT = int(os.getenv("PORT", 5000))
 
 bot = None
 
-if BOT_TOKEN:
+if BOT_TOKEN and BOT_TOKEN != "8606610454:AAG6wYBzLBI0ETLojTWx7dORnbRTRUBUQOo":
     bot = telebot.TeleBot(BOT_TOKEN)
-else:
-    print("⚠️ BOT_TOKEN не установлен")
-
-if not CHAT_ID:
-    print("⚠️ CHAT_ID не установлен")
-else:
-    try:
-        CHAT_ID = int(CHAT_ID)
-    except ValueError:
-        print("⚠️ CHAT_ID должен быть числом")
-        CHAT_ID = None
 
 
 # =========================================================
 # БАЗА ДАННЫХ
 # =========================================================
 
-def get_connection():
-
-    connection = sqlite3.connect(
-        DB_PATH,
-        timeout=30
-    )
-
-    connection.row_factory = sqlite3.Row
-
-    return connection
-
-
 def init_database():
 
-    connection = get_connection()
+    connection = sqlite3.connect(DB_PATH)
 
     cursor = connection.cursor()
 
@@ -90,24 +81,552 @@ def init_database():
     connection.commit()
     connection.close()
 
-    print("✅ База данных готова:")
-    print(DB_PATH)
+
+# =========================================================
+# HTML
+# =========================================================
+
+HTML = """
+<!DOCTYPE html>
+
+<html lang="ru">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0">
+
+<title>Оценка сотрудника</title>
+
+<style>
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+
+    margin: 0;
+
+    min-height: 100vh;
+
+    font-family: Arial, sans-serif;
+
+    background:
+        linear-gradient(
+            135deg,
+            #03152d,
+            #0865c5
+        );
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    padding: 20px;
+}
+
+.card {
+
+    width: 100%;
+
+    max-width: 520px;
+
+    background: white;
+
+    border-radius: 24px;
+
+    padding: 30px;
+
+    box-shadow:
+        0 20px 60px rgba(0,0,0,.35);
+}
+
+.logo {
+
+    width: 75px;
+
+    height: 75px;
+
+    margin: 0 auto 15px;
+
+    border-radius: 50%;
+
+    background: #0865c5;
+
+    color: white;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    font-size: 35px;
+}
+
+h1 {
+
+    text-align: center;
+
+    color: #073b75;
+
+    margin: 0;
+}
+
+.subtitle {
+
+    text-align: center;
+
+    color: #777;
+
+    margin: 8px 0 25px;
+}
+
+label {
+
+    display: block;
+
+    font-weight: bold;
+
+    margin-top: 18px;
+
+    margin-bottom: 7px;
+
+    color: #333;
+}
+
+input,
+textarea {
+
+    width: 100%;
+
+    padding: 14px;
+
+    border: 1px solid #ccc;
+
+    border-radius: 12px;
+
+    font-size: 16px;
+
+    outline: none;
+}
+
+input:focus,
+textarea:focus {
+
+    border-color: #0865c5;
+}
+
+textarea {
+
+    min-height: 110px;
+
+    resize: vertical;
+}
+
+.stars {
+
+    display: flex;
+
+    flex-direction: row-reverse;
+
+    justify-content: center;
+
+    gap: 5px;
+
+    margin: 10px 0 20px;
+}
+
+.stars input {
+
+    display: none;
+}
+
+.stars label {
+
+    margin: 0;
+
+    font-size: 45px;
+
+    color: #ccc;
+
+    cursor: pointer;
+}
+
+.stars label:hover,
+.stars label:hover ~ label,
+.stars input:checked ~ label {
+
+    color: #ffc107;
+}
+
+button {
+
+    width: 100%;
+
+    border: none;
+
+    border-radius: 12px;
+
+    background: #0865c5;
+
+    color: white;
+
+    padding: 16px;
+
+    margin-top: 20px;
+
+    font-size: 17px;
+
+    font-weight: bold;
+
+    cursor: pointer;
+}
+
+button:hover {
+
+    background: #064d98;
+}
+
+.success {
+
+    display: none;
+
+    text-align: center;
+
+    padding: 20px;
+}
+
+.success-icon {
+
+    font-size: 65px;
+}
+
+.success h2 {
+
+    color: #16833b;
+}
+
+.footer {
+
+    text-align: center;
+
+    color: #999;
+
+    font-size: 12px;
+
+    margin-top: 18px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="card">
+
+<div id="formBlock">
+
+<div class="logo">
+★
+</div>
+
+<h1>
+Оценка сотрудника
+</h1>
+
+<div class="subtitle">
+Оцените качество обслуживания
+</div>
+
+
+<label for="checkpoint">
+📍 Пункт пропуска
+</label>
+
+<input
+    type="text"
+    id="checkpoint"
+    placeholder="Введите пункт пропуска"
+>
+
+
+<label for="employee">
+👤 ФИО сотрудника
+</label>
+
+<input
+    type="text"
+    id="employee"
+    placeholder="Введите ФИО сотрудника"
+>
+
+
+<label>
+⭐ Оценка работы
+</label>
+
+<div class="stars">
+
+<input
+    type="radio"
+    name="rating"
+    id="star5"
+    value="5"
+>
+
+<label for="star5">★</label>
+
+
+<input
+    type="radio"
+    name="rating"
+    id="star4"
+    value="4"
+>
+
+<label for="star4">★</label>
+
+
+<input
+    type="radio"
+    name="rating"
+    id="star3"
+    value="3"
+>
+
+<label for="star3">★</label>
+
+
+<input
+    type="radio"
+    name="rating"
+    id="star2"
+    value="2"
+>
+
+<label for="star2">★</label>
+
+
+<input
+    type="radio"
+    name="rating"
+    id="star1"
+    value="1"
+>
+
+<label for="star1">★</label>
+
+</div>
+
+
+<label for="comment">
+💬 Комментарий
+</label>
+
+<textarea
+    id="comment"
+    placeholder="Напишите отзыв или замечание..."
+></textarea>
+
+
+<button onclick="sendRating()">
+Отправить оценку
+</button>
+
+
+<div class="footer">
+
+Ваш отзыв помогает улучшать качество обслуживания
+
+</div>
+
+</div>
+
+
+<div
+    class="success"
+    id="successBlock"
+>
+
+<div class="success-icon">
+✅
+</div>
+
+<h2>
+Спасибо за оценку!
+</h2>
+
+<p>
+Ваша оценка успешно отправлена.
+</p>
+
+<button onclick="location.reload()">
+Новая оценка
+</button>
+
+</div>
+
+</div>
+
+
+<script>
+
+async function sendRating() {
+
+    const checkpoint =
+        document.getElementById("checkpoint")
+        .value.trim();
+
+    const employee =
+        document.getElementById("employee")
+        .value.trim();
+
+    const comment =
+        document.getElementById("comment")
+        .value.trim();
+
+    const ratingElement =
+        document.querySelector(
+            'input[name="rating"]:checked'
+        );
+
+
+    if (!checkpoint) {
+
+        alert(
+            "Введите пункт пропуска."
+        );
+
+        return;
+    }
+
+
+    if (!employee) {
+
+        alert(
+            "Введите ФИО сотрудника."
+        );
+
+        return;
+    }
+
+
+    if (!ratingElement) {
+
+        alert(
+            "Поставьте оценку от 1 до 5."
+        );
+
+        return;
+    }
+
+
+    const rating =
+        Number(ratingElement.value);
+
+
+    const data = {
+
+        checkpoint: checkpoint,
+
+        employee: employee,
+
+        rating: rating,
+
+        comment: comment
+
+    };
+
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/rating",
+                {
+
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body:
+                        JSON.stringify(data)
+
+                }
+            );
+
+
+        const result =
+            await response.json();
+
+
+        if (!response.ok ||
+            !result.success) {
+
+            throw new Error(
+                result.message ||
+                "Ошибка сервера"
+            );
+        }
+
+
+        document
+            .getElementById(
+                "formBlock"
+            )
+            .style.display = "none";
+
+
+        document
+            .getElementById(
+                "successBlock"
+            )
+            .style.display = "block";
+
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert(
+            "❌ Не удалось отправить оценку.\\n\\n" +
+            error.message
+        );
+
+    }
+
+}
+
+</script>
+
+</body>
+
+</html>
+"""
 
 
 # =========================================================
-# ГЛАВНАЯ СТРАНИЦА
+# ГЛАВНАЯ
 # =========================================================
 
 @app.route("/")
 def home():
 
-    return render_template(
-        "index.html"
-    )
+    return render_template_string(HTML)
 
 
 # =========================================================
-# СОЗДАНИЕ ОЦЕНКИ
+# СОХРАНЕНИЕ ОЦЕНКИ
 # =========================================================
 
 @app.route(
@@ -116,164 +635,225 @@ def home():
 )
 def receive_rating():
 
+    data = request.get_json()
+
+    if not data:
+
+        return jsonify({
+            "success": False,
+            "message": "Нет данных"
+        }), 400
+
+
+    checkpoint = str(
+        data.get("checkpoint", "")
+    ).strip()
+
+
+    employee = str(
+        data.get("employee", "")
+    ).strip()
+
+
+    comment = str(
+        data.get("comment", "")
+    ).strip()
+
+
     try:
 
-        data = request.get_json()
-
-        if not data:
-
-            return jsonify({
-                "success": False,
-                "message": "Нет данных"
-            }), 400
-
-
-        checkpoint = str(
-            data.get("checkpoint", "")
-        ).strip()
-
-
-        employee = str(
-            data.get("employee", "")
-        ).strip()
-
-
-        comment = str(
-            data.get("comment", "")
-        ).strip()
-
-
-        try:
-
-            rating = int(
-                data.get("rating")
-            )
-
-        except (
-            TypeError,
-            ValueError
-        ):
-
-            return jsonify({
-                "success": False,
-                "message": "Некорректная оценка"
-            }), 400
-
-
-        # -------------------------------------------------
-        # ПРОВЕРКА
-        # -------------------------------------------------
-
-        if not checkpoint:
-
-            return jsonify({
-                "success": False,
-                "message": "Не указан пункт пропуска"
-            }), 400
-
-
-        if not employee:
-
-            return jsonify({
-                "success": False,
-                "message": "Не указано ФИО сотрудника"
-            }), 400
-
-
-        if rating < 1 or rating > 5:
-
-            return jsonify({
-                "success": False,
-                "message": "Оценка должна быть от 1 до 5"
-            }), 400
-
-
-        # -------------------------------------------------
-        # ВРЕМЯ
-        # -------------------------------------------------
-
-        created_at = datetime.now().strftime(
-            "%Y-%m-%d %H:%M:%S"
+        rating = int(
+            data.get("rating")
         )
 
+    except (TypeError, ValueError):
 
-        # -------------------------------------------------
-        # СОХРАНЕНИЕ
-        # -------------------------------------------------
+        return jsonify({
+            "success": False,
+            "message": "Некорректная оценка"
+        }), 400
 
-        connection = get_connection()
 
-        cursor = connection.cursor()
+    if not checkpoint:
 
-        cursor.execute("""
-            INSERT INTO ratings
-            (
-                checkpoint,
-                employee,
-                rating,
-                comment,
-                created_at
-            )
-            VALUES (?, ?, ?, ?, ?)
-        """, (
+        return jsonify({
+            "success": False,
+            "message":
+                "Не указан пункт пропуска"
+        }), 400
+
+
+    if not employee:
+
+        return jsonify({
+            "success": False,
+            "message":
+                "Не указано ФИО"
+        }), 400
+
+
+    if rating < 1 or rating > 5:
+
+        return jsonify({
+            "success": False,
+            "message":
+                "Оценка должна быть от 1 до 5"
+        }), 400
+
+
+    from datetime import datetime
+
+    created_at = datetime.now().strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+
+
+    connection = sqlite3.connect(
+        DB_PATH
+    )
+
+    cursor = connection.cursor()
+
+
+    cursor.execute("""
+        INSERT INTO ratings
+        (
             checkpoint,
             employee,
             rating,
             comment,
             created_at
-        ))
+        )
+
+        VALUES (?, ?, ?, ?, ?)
+    """, (
+        checkpoint,
+        employee,
+        rating,
+        comment,
+        created_at
+    ))
 
 
-        rating_id = cursor.lastrowid
+    rating_id = cursor.lastrowid
 
-        connection.commit()
-        connection.close()
+    connection.commit()
 
-
-        print()
-        print("==============================")
-        print("📝 НОВАЯ ОЦЕНКА")
-        print("==============================")
-        print("ID:", rating_id)
-        print("Пункт:", checkpoint)
-        print("Сотрудник:", employee)
-        print("Оценка:", rating)
-        print("Комментарий:", comment)
-        print("Дата:", created_at)
-        print("==============================")
+    connection.close()
 
 
-        return jsonify({
+    print(
+        "Новая оценка:",
+        rating_id
+    )
 
-            "success": True,
 
-            "message": "Оценка сохранена",
+    # Отправляем новую оценку в Telegram
+    send_rating_to_telegram(
+        rating_id,
+        checkpoint,
+        employee,
+        rating,
+        comment,
+        created_at
+    )
 
-            "id": rating_id,
 
-            "created_at": created_at
+    return jsonify({
 
-        })
+        "success": True,
 
+        "message":
+            "Оценка сохранена",
+
+        "id":
+            rating_id,
+
+        "created_at":
+            created_at
+
+    })
+
+
+# =========================================================
+# TELEGRAM — ОТПРАВКА НОВОЙ ОЦЕНКИ
+# =========================================================
+
+def send_rating_to_telegram(
+    rating_id,
+    checkpoint,
+    employee,
+    rating,
+    comment,
+    created_at
+):
+
+    if not bot:
+
+        print(
+            "Telegram бот не настроен"
+        )
+
+        return
+
+
+    if not CHAT_ID:
+
+        print(
+            "CHAT_ID не настроен"
+        )
+
+        return
+
+
+    stars = "⭐" * rating
+
+
+    text = (
+
+        "📝 НОВАЯ ОЦЕНКА\n\n"
+
+        f"🆔 ID: {rating_id}\n\n"
+
+        f"📍 Пункт пропуска:\n"
+        f"{checkpoint}\n\n"
+
+        f"👤 Сотрудник:\n"
+        f"{employee}\n\n"
+
+        f"⭐ Оценка:\n"
+        f"{stars} ({rating}/5)\n\n"
+
+        f"💬 Комментарий:\n"
+        f"{comment or 'Без комментария'}\n\n"
+
+        f"🕐 Дата:\n"
+        f"{created_at}"
+
+    )
+
+
+    try:
+
+        bot.send_message(
+            int(CHAT_ID),
+            text
+        )
+
+        print(
+            "Оценка отправлена в Telegram"
+        )
 
     except Exception as error:
 
         print(
-            "❌ Ошибка сохранения:",
+            "Ошибка Telegram:",
             error
         )
 
-        return jsonify({
-
-            "success": False,
-
-            "message": "Ошибка сервера"
-
-        }), 500
-
 
 # =========================================================
-# ПОЛУЧЕНИЕ ВСЕХ ОЦЕНОК
+# API — ВСЕ ОЦЕНКИ
 # =========================================================
 
 @app.route(
@@ -282,123 +862,74 @@ def receive_rating():
 )
 def get_ratings():
 
-    try:
+    connection = sqlite3.connect(
+        DB_PATH
+    )
 
-        connection = get_connection()
+    connection.row_factory = sqlite3.Row
 
-        cursor = connection.cursor()
-
-        cursor.execute("""
-            SELECT
-                id,
-                checkpoint,
-                employee,
-                rating,
-                comment,
-                created_at
-
-            FROM ratings
-
-            ORDER BY id DESC
-        """)
-
-        rows = cursor.fetchall()
-
-        connection.close()
+    cursor = connection.cursor()
 
 
-        ratings = []
+    cursor.execute("""
+        SELECT
+            id,
+            checkpoint,
+            employee,
+            rating,
+            comment,
+            created_at
 
-        for row in rows:
+        FROM ratings
 
-            ratings.append({
-
-                "id": row["id"],
-
-                "checkpoint":
-                    row["checkpoint"],
-
-                "employee":
-                    row["employee"],
-
-                "rating":
-                    row["rating"],
-
-                "comment":
-                    row["comment"],
-
-                "created_at":
-                    row["created_at"]
-
-            })
+        ORDER BY id DESC
+    """)
 
 
-        return jsonify({
+    rows = cursor.fetchall()
 
-            "success": True,
+    connection.close()
 
-            "count": len(ratings),
 
-            "ratings": ratings
+    ratings = []
+
+
+    for row in rows:
+
+        ratings.append({
+
+            "id":
+                row["id"],
+
+            "checkpoint":
+                row["checkpoint"],
+
+            "employee":
+                row["employee"],
+
+            "rating":
+                row["rating"],
+
+            "comment":
+                row["comment"],
+
+            "created_at":
+                row["created_at"]
 
         })
 
 
-    except Exception as error:
+    return jsonify({
 
-        print(
-            "❌ Ошибка получения оценок:",
-            error
-        )
+        "success": True,
 
-        return jsonify({
+        "count":
+            len(ratings),
 
-            "success": False,
+        "ratings":
+            ratings
 
-            "message": "Ошибка сервера"
-
-        }), 500
-
-
-# =========================================================
-# ФОРМАТ TELEGRAM-СООБЩЕНИЯ
-# =========================================================
-
-def format_rating(item):
-
-    rating = int(
-        item["rating"]
-    )
-
-    stars = "⭐" * rating
-
-    comment = (
-        item.get("comment")
-        or "Без комментария"
-    )
-
-    return (
-
-        "📝 НОВАЯ ОЦЕНКА\n\n"
-
-        f"🆔 ID: {item['id']}\n\n"
-
-        f"📍 Пункт пропуска:\n"
-        f"{item['checkpoint']}\n\n"
-
-        f"👤 Сотрудник:\n"
-        f"{item['employee']}\n\n"
-
-        f"⭐ Оценка:\n"
-        f"{stars} ({rating}/5)\n\n"
-
-        f"💬 Комментарий:\n"
-        f"{comment}\n\n"
-
-        f"🕐 Дата:\n"
-        f"{item['created_at']}"
-
-    )
+    })
 
 
 # =========================================================
@@ -418,12 +949,9 @@ if bot:
 
             "🤖 Система оценки сотрудников\n\n"
 
-            "Бот подключён.\n\n"
-
             "/report — общий отчёт\n"
             "/last — последние оценки\n"
-            "/chatid — узнать Chat ID\n"
-            "/test — проверить бота"
+            "/chatid — узнать Chat ID"
 
         )
 
@@ -437,22 +965,8 @@ if bot:
 
             message.chat.id,
 
-            f"🆔 Ваш Chat ID:\n\n"
+            f"🆔 Ваш Chat ID:\n"
             f"{message.chat.id}"
-
-        )
-
-
-    @bot.message_handler(
-        commands=["test"]
-    )
-    def test(message):
-
-        bot.send_message(
-
-            message.chat.id,
-
-            "✅ Telegram-бот работает!"
 
         )
 
@@ -462,9 +976,28 @@ if bot:
     )
     def report(message):
 
-        ratings = get_ratings().json
+        connection = sqlite3.connect(
+            DB_PATH
+        )
 
-        if not ratings.get("ratings"):
+        cursor = connection.cursor()
+
+
+        cursor.execute("""
+            SELECT
+                COUNT(*),
+                AVG(rating)
+
+            FROM ratings
+        """)
+
+
+        total, average = cursor.fetchone()
+
+        connection.close()
+
+
+        if total == 0:
 
             bot.send_message(
                 message.chat.id,
@@ -472,16 +1005,6 @@ if bot:
             )
 
             return
-
-
-        items = ratings["ratings"]
-
-        total = len(items)
-
-        average = sum(
-            int(item["rating"])
-            for item in items
-        ) / total
 
 
         text = (
@@ -506,17 +1029,37 @@ if bot:
     @bot.message_handler(
         commands=["last"]
     )
-    def last(message):
+    def last_ratings(message):
 
-        data = get_ratings().json
+        connection = sqlite3.connect(
+            DB_PATH
+        )
 
-        items = data.get(
-            "ratings",
-            []
-        )[:10]
+        cursor = connection.cursor()
 
 
-        if not items:
+        cursor.execute("""
+            SELECT
+                checkpoint,
+                employee,
+                rating,
+                comment,
+                created_at
+
+            FROM ratings
+
+            ORDER BY id DESC
+
+            LIMIT 10
+        """)
+
+
+        rows = cursor.fetchall()
+
+        connection.close()
+
+
+        if not rows:
 
             bot.send_message(
                 message.chat.id,
@@ -526,32 +1069,34 @@ if bot:
             return
 
 
-        text = "📋 ПОСЛЕДНИЕ ОЦЕНКИ\n\n"
+        text = (
+            "📋 ПОСЛЕДНИЕ ОЦЕНКИ\n\n"
+        )
 
 
-        for item in items:
+        for row in rows:
 
-            rating = int(
-                item["rating"]
-            )
+            checkpoint = row[0]
+            employee = row[1]
+            rating = row[2]
+            comment = row[3]
+            created_at = row[4]
 
-            stars = "⭐" * rating
 
             text += (
 
-                f"📍 {item['checkpoint']}\n"
+                f"📍 {checkpoint}\n"
 
-                f"👤 {item['employee']}\n"
+                f"👤 {employee}\n"
 
-                f"{stars} "
-                f"({rating}/5)\n"
+                f"⭐ {rating}/5\n"
 
                 f"💬 "
-                f"{item.get('comment') or 'Без комментария'}\n"
+                f"{comment or 'Без комментария'}\n"
 
-                f"🕐 {item['created_at']}\n"
+                f"🕐 {created_at}\n"
 
-                "────────────────\n"
+                "──────────────\n"
 
             )
 
@@ -563,153 +1108,38 @@ if bot:
 
 
 # =========================================================
-# АВТОМАТИЧЕСКАЯ ОТПРАВКА НОВЫХ ОЦЕНОК
-# =========================================================
-
-last_rating_id = 0
-
-
-def telegram_monitor():
-
-    global last_rating_id
-
-    print(
-        "🤖 Telegram-монитор запущен"
-    )
-
-
-    while True:
-
-        try:
-
-            if not bot or not CHAT_ID:
-
-                time.sleep(10)
-
-                continue
-
-
-            connection = get_connection()
-
-            cursor = connection.cursor()
-
-
-            cursor.execute("""
-                SELECT
-                    id,
-                    checkpoint,
-                    employee,
-                    rating,
-                    comment,
-                    created_at
-
-                FROM ratings
-
-                WHERE id > ?
-
-                ORDER BY id ASC
-            """, (
-                last_rating_id,
-            ))
-
-
-            rows = cursor.fetchall()
-
-            connection.close()
-
-
-            for row in rows:
-
-                item = {
-
-                    "id": row["id"],
-
-                    "checkpoint":
-                        row["checkpoint"],
-
-                    "employee":
-                        row["employee"],
-
-                    "rating":
-                        row["rating"],
-
-                    "comment":
-                        row["comment"],
-
-                    "created_at":
-                        row["created_at"]
-
-                }
-
-
-                bot.send_message(
-
-                    CHAT_ID,
-
-                    format_rating(item)
-
-                )
-
-
-                last_rating_id = row["id"]
-
-
-                print(
-                    "✅ Отправлено в Telegram:",
-                    row["id"]
-                )
-
-
-        except Exception as error:
-
-            print(
-                "❌ Telegram error:",
-                error
-            )
-
-
-        time.sleep(10)
-
-
-# =========================================================
 # TELEGRAM POLLING
 # =========================================================
 
-def telegram_polling():
+def start_telegram():
 
     if not bot:
 
         print(
-            "⚠️ Telegram отключён: "
-            "BOT_TOKEN не установлен"
+            "Telegram отключен: "
+            "BOT_TOKEN не задан"
         )
 
         return
 
 
     print(
-        "🤖 Telegram polling запущен"
+        "Telegram бот запущен"
     )
 
 
-    while True:
+    try:
 
-        try:
+        bot.infinity_polling(
+            skip_pending=True
+        )
 
-            bot.infinity_polling(
-                skip_pending=True,
-                timeout=30,
-                long_polling_timeout=30
-            )
+    except Exception as error:
 
-        except Exception as error:
-
-            print(
-                "❌ Telegram polling:",
-                error
-            )
-
-            time.sleep(10)
+        print(
+            "Ошибка Telegram:",
+            error
+        )
 
 
 # =========================================================
@@ -719,32 +1149,50 @@ def telegram_polling():
 init_database()
 
 
-if bot:
-
-    threading.Thread(
-        target=telegram_polling,
-        daemon=True
-    ).start()
-
-
-    threading.Thread(
-        target=telegram_monitor,
-        daemon=True
-    ).start()
-
-
-print("==============================")
-print("СИСТЕМА ОЦЕНКИ СОТРУДНИКОВ")
-print("==============================")
-print("PORT:", PORT)
-print("DATABASE:", DB_PATH)
-print("==============================")
-
-
 if __name__ == "__main__":
+
+    if bot:
+
+        telegram_thread = threading.Thread(
+            target=start_telegram,
+            daemon=True
+        )
+
+        telegram_thread.start()
+
+
+    port = int(
+        os.environ.get(
+            "PORT",
+            5000
+        )
+    )
+
+
+    print(
+        "=============================="
+    )
+
+    print(
+        "СИСТЕМА ОЦЕНКИ СОТРУДНИКОВ"
+    )
+
+    print(
+        "=============================="
+    )
+
+    print(
+        "Порт:",
+        port
+    )
+
+    print(
+        "=============================="
+    )
+
 
     app.run(
         host="0.0.0.0",
-        port=PORT,
+        port=port,
         debug=False
     )
