@@ -1,502 +1,310 @@
 <!DOCTYPE html>
-
 <html lang="ru">
-
 <head>
-
-<meta charset="UTF-8">
-
-<meta name="viewport"
-      content="width=device-width, initial-scale=1.0">
-
-<title>Оценка сотрудника</title>
-
-<style>
-
-* {
-    box-sizing: border-box;
-}
-
-body {
-
-    margin: 0;
-
-    min-height: 100vh;
-
-    font-family: Arial, sans-serif;
-
-    background:
-        linear-gradient(
-            135deg,
-            #03152d,
-            #0865c5
-        );
-
-    display: flex;
-
-    align-items: center;
-
-    justify-content: center;
-
-    padding: 20px;
-}
-
-.card {
-
-    width: 100%;
-
-    max-width: 520px;
-
-    background: white;
-
-    border-radius: 24px;
-
-    padding: 30px;
-
-    box-shadow:
-        0 20px 60px rgba(0,0,0,.35);
-}
-
-.logo {
-
-    width: 75px;
-
-    height: 75px;
-
-    margin: 0 auto 15px;
-
-    border-radius: 50%;
-
-    background: #0865c5;
-
-    color: white;
-
-    display: flex;
-
-    align-items: center;
-
-    justify-content: center;
-
-    font-size: 35px;
-}
-
-h1 {
-
-    text-align: center;
-
-    color: #073b75;
-
-    margin: 0;
-}
-
-.subtitle {
-
-    text-align: center;
-
-    color: #777;
-
-    margin: 8px 0 25px;
-}
-
-label {
-
-    display: block;
-
-    font-weight: bold;
-
-    margin-top: 18px;
-
-    margin-bottom: 7px;
-
-    color: #333;
-}
-
-input,
-textarea {
-
-    width: 100%;
-
-    padding: 14px;
-
-    border: 1px solid #ccc;
-
-    border-radius: 12px;
-
-    font-size: 16px;
-
-    outline: none;
-}
-
-input:focus,
-textarea:focus {
-
-    border-color: #0865c5;
-}
-
-textarea {
-
-    min-height: 110px;
-
-    resize: vertical;
-}
-
-.stars {
-
-    display: flex;
-
-    flex-direction: row-reverse;
-
-    justify-content: center;
-
-    gap: 5px;
-
-    margin: 10px 0 20px;
-}
-
-.stars input {
-
-    display: none;
-}
-
-.stars label {
-
-    margin: 0;
-
-    font-size: 45px;
-
-    color: #ccc;
-
-    cursor: pointer;
-}
-
-.stars label:hover,
-.stars label:hover ~ label,
-.stars input:checked ~ label {
-
-    color: #ffc107;
-}
-
-button {
-
-    width: 100%;
-
-    border: none;
-
-    border-radius: 12px;
-
-    background: #0865c5;
-
-    color: white;
-
-    padding: 16px;
-
-    margin-top: 20px;
-
-    font-size: 17px;
-
-    font-weight: bold;
-
-    cursor: pointer;
-}
-
-button:hover {
-
-    background: #064d98;
-}
-
-.success {
-
-    display: none;
-
-    text-align: center;
-
-    padding: 20px;
-}
-
-.success-icon {
-
-    font-size: 65px;
-}
-
-.success h2 {
-
-    color: #16833b;
-}
-
-.footer {
-
-    text-align: center;
-
-    color: #999;
-
-    font-size: 12px;
-
-    margin-top: 18px;
-}
-
-</style>
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Оценка сотрудников</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent-color: #2563eb;
+            --accent-hover: #1d4ed8;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --star-inactive: #475569;
+            --star-active: #f59e0b;
+            --error-color: #ef4444;
+            --success-color: #10b981;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 16px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 480px;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 28px 24px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .header h1 {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--text-main);
+        }
+
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 12px 14px;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-main);
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+
+        input[type="text"]:focus,
+        textarea:focus {
+            border-color: var(--accent-color);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 90px;
+        }
+
+        /* Интерактивные звёзды */
+        .stars-container {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            direction: row;
+            margin-top: 6px;
+        }
+
+        .star {
+            font-size: 32px;
+            color: var(--star-inactive);
+            cursor: pointer;
+            transition: color 0.15s ease, transform 0.15s ease;
+            user-select: none;
+        }
+
+        .star:hover,
+        .star.active {
+            color: var(--star-active);
+        }
+
+        .star:active {
+            transform: scale(1.2);
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 14px;
+            background-color: var(--accent-color);
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s ease, opacity 0.2s ease;
+            margin-top: 10px;
+        }
+
+        .btn-submit:hover {
+            background-color: var(--accent-hover);
+        }
+
+        .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Сообщения об успехе/ошибке */
+        .alert {
+            display: none;
+            padding: 16px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: center;
+            font-size: 15px;
+            font-weight: 500;
+            line-height: 1.4;
+        }
+
+        .alert-success {
+            background-color: rgba(16, 185, 129, 0.15);
+            border: 1px solid var(--success-color);
+            color: var(--success-color);
+        }
+
+        .alert-error {
+            background-color: rgba(239, 68, 68, 0.15);
+            border: 1px solid var(--error-color);
+            color: var(--error-color);
+        }
+    </style>
 </head>
-
 <body>
 
-<div class="card">
+<div class="container">
+    <div class="header">
+        <h1>Оценка качества обслуживания</h1>
+        <p>Пожалуйста, оставьте ваш отзыв о работе сотрудника</p>
+    </div>
 
-<div id="formBlock">
+    <form id="ratingForm">
+        <div class="form-group">
+            <label for="checkpoint">Пункт пропуска *</label>
+            <input type="text" id="checkpoint" placeholder="Например: КПП №1" required>
+        </div>
 
-<div class="logo">
-★
-</div>
+        <div class="form-group">
+            <label for="employee_name">ФИО сотрудника *</label>
+            <input type="text" id="employee_name" placeholder="Иванов И.И." required>
+        </div>
 
-<h1>
-Оценка сотрудника
-</h1>
+        <div class="form-group">
+            <label>Оценка качества работы *</label>
+            <div class="stars-container" id="starsContainer">
+                <span class="star" data-value="1">&#9733;</span>
+                <span class="star" data-value="2">&#9733;</span>
+                <span class="star" data-value="3">&#9733;</span>
+                <span class="star" data-value="4">&#9733;</span>
+                <span class="star" data-value="5">&#9733;</span>
+            </div>
+        </div>
 
-<div class="subtitle">
-Оцените качество обслуживания
-</div>
+        <div class="form-group">
+            <label for="comment">Комментарий</label>
+            <textarea id="comment" placeholder="Напишите ваш отзыв (необязательно)"></textarea>
+        </div>
 
-<label for="checkpoint">
-📍 Пункт пропуска
-</label>
+        <button type="submit" class="btn-submit" id="submitBtn">Отправить оценку</button>
+    </form>
 
-<input
-    type="text"
-    id="checkpoint"
-    placeholder="Введите пункт пропуска"
->
-
-<label for="employee">
-👤 ФИО сотрудника
-</label>
-
-<input
-    type="text"
-    id="employee"
-    placeholder="Введите ФИО сотрудника"
->
-
-<label>
-⭐ Оценка работы
-</label>
-
-<div class="stars">
-
-<input
-    type="radio"
-    name="rating"
-    id="star5"
-    value="5"
->
-
-<label for="star5">★</label>
-
-<input
-    type="radio"
-    name="rating"
-    id="star4"
-    value="4"
->
-
-<label for="star4">★</label>
-
-<input
-    type="radio"
-    name="rating"
-    id="star3"
-    value="3"
->
-
-<label for="star3">★</label>
-
-<input
-    type="radio"
-    name="rating"
-    id="star2"
-    value="2"
->
-
-<label for="star2">★</label>
-
-<input
-    type="radio"
-    name="rating"
-    id="star1"
-    value="1"
->
-
-<label for="star1">★</label>
-
-</div>
-
-<label for="comment">
-💬 Комментарий
-</label>
-
-<textarea
-    id="comment"
-    placeholder="Напишите отзыв или замечание..."
-></textarea>
-
-<button onclick="sendRating()">
-Отправить оценку
-</button>
-
-<div class="footer">
-
-Ваш отзыв помогает улучшать качество обслуживания
-
-</div>
-
-</div>
-
-<div
-    class="success"
-    id="successBlock"
->
-
-<div class="success-icon">
-✅
-</div>
-
-<h2>
-Спасибо за оценку!
-</h2>
-
-<p>
-Ваша оценка успешно отправлена.
-</p>
-
-<button onclick="location.reload()">
-Новая оценка
-</button>
-
-</div>
-
+    <div id="alertSuccess" class="alert alert-success"></div>
+    <div id="alertError" class="alert alert-error"></div>
 </div>
 
 <script>
+    let currentRating = 0;
+    const stars = document.querySelectorAll('.star');
+    const form = document.getElementById('ratingForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const alertSuccess = document.getElementById('alertSuccess');
+    const alertError = document.getElementById('alertError');
 
-async function sendRating() {
+    // Логика выбора звёзд
+    stars.forEach(star => {
+        star.addEventListener('mouseover', function() {
+            const val = this.getAttribute('data-value');
+            highlightStars(val);
+        });
 
-    const checkpoint =
-        document.getElementById("checkpoint")
-        .value.trim();
+        star.addEventListener('mouseout', function() {
+            highlightStars(currentRating);
+        });
 
-    const employee =
-        document.getElementById("employee")
-        .value.trim();
+        star.addEventListener('click', function() {
+            currentRating = this.getAttribute('data-value');
+            highlightStars(currentRating);
+        });
+    });
 
-    const comment =
-        document.getElementById("comment")
-        .value.trim();
-
-    const ratingElement =
-        document.querySelector(
-            'input[name="rating"]:checked'
-        );
-
-    if (!checkpoint) {
-
-        alert(
-            "Введите пункт пропуска."
-        );
-
-        return;
+    function highlightStars(val) {
+        stars.forEach(star => {
+            if (star.getAttribute('data-value') <= val) {
+                star.classList.add('active');
+            } else {
+                star.classList.remove('active');
+            }
+        });
     }
 
-    if (!employee) {
+    // Отправка формы
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
 
-        alert(
-            "Введите ФИО сотрудника."
-        );
+        alertSuccess.style.display = 'none';
+        alertError.style.display = 'none';
 
-        return;
-    }
+        const checkpoint = document.getElementById('checkpoint').value.trim();
+        const employeeName = document.getElementById('employee_name').value.trim();
+        const comment = document.getElementById('comment').value.trim();
 
-    if (!ratingElement) {
-
-        alert(
-            "Поставьте оценку от 1 до 5."
-        );
-
-        return;
-    }
-
-    const rating =
-        Number(ratingElement.value);
-
-    const data = {
-
-        checkpoint: checkpoint,
-
-        employee: employee,
-
-        rating: rating,
-
-        comment: comment
-
-    };
-
-    try {
-
-        const response =
-            await fetch(
-                "/api/rating",
-                {
-
-                    method: "POST",
-
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
-
-                    body:
-                        JSON.stringify(data)
-
-                }
-            );
-
-        const result =
-            await response.json();
-
-        if (!response.ok ||
-            !result.success) {
-
-            throw new Error(
-                result.message ||
-                "Ошибка сервера"
-            );
+        if (currentRating === 0) {
+            showError('Пожалуйста, выберите оценку от 1 до 5 звёзд.');
+            return;
         }
 
-        document
-            .getElementById(
-                "formBlock"
-            )
-            .style.display = "none";
+        submitBtn.disabled = true;
+        submitBtn.innerText = 'Отправка...';
 
-        document
-            .getElementById(
-                "successBlock"
-            )
-            .style.display = "block";
+        try {
+            const response = await fetch('/api/rate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    checkpoint: checkpoint,
+                    employee_name: employeeName,
+                    rating: currentRating,
+                    comment: comment
+                })
+            });
 
-    } catch (error) {
+            const result = await response.json();
 
-        console.error(error);
+            if (response.ok && result.success) {
+                form.style.display = 'none';
+                alertSuccess.innerText = result.message;
+                alertSuccess.style.display = 'block';
+            } else {
+                showError(result.message || 'Произошла ошибка при отправке.');
+                submitBtn.disabled = false;
+                submitBtn.innerText = 'Отправить оценку';
+            }
+        } catch (err) {
+            showError('Ошибка сети или сервера. Проверьте подключение к интернету.');
+            submitBtn.disabled = false;
+            submitBtn.innerText = 'Отправить оценку';
+        }
+    });
 
-        alert(
-            "❌ Не удалось отправить оценку.\\n\\n" +
-            error.message
-        );
-
+    function showError(msg) {
+        alertError.innerText = msg;
+        alertError.style.display = 'block';
     }
-
-}
-
 </script>
 
 </body>
-
 </html>
