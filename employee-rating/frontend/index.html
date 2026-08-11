@@ -1,94 +1,138 @@
-```html
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
+
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
     <title>Оценка сотрудника</title>
 
+
     <style>
+
         * {
             box-sizing: border-box;
         }
 
+
         body {
+
             margin: 0;
+
             min-height: 100vh;
+
             font-family: Arial, sans-serif;
 
-            background: linear-gradient(
-                135deg,
-                #03152d,
-                #0865c5
-            );
+            background:
+                linear-gradient(
+                    135deg,
+                    #03152d,
+                    #0865c5
+                );
 
             display: flex;
+
             align-items: center;
+
             justify-content: center;
+
             padding: 20px;
         }
 
+
         .card {
+
             width: 100%;
+
             max-width: 520px;
 
             background: white;
+
             border-radius: 24px;
+
             padding: 30px;
 
             box-shadow:
-                0 20px 60px rgba(0, 0, 0, .35);
+                0 20px 60px
+                rgba(0, 0, 0, .35);
         }
 
+
         .logo {
+
             width: 75px;
+
             height: 75px;
 
-            margin: 0 auto 15px;
+            margin:
+                0 auto 15px;
 
             border-radius: 50%;
 
             background: #0865c5;
+
             color: white;
 
             display: flex;
+
             align-items: center;
+
             justify-content: center;
 
             font-size: 35px;
         }
 
+
         h1 {
+
             text-align: center;
+
             color: #073b75;
+
             margin: 0;
         }
 
+
         .subtitle {
+
             text-align: center;
+
             color: #777;
-            margin: 8px 0 25px;
+
+            margin:
+                8px 0 25px;
         }
 
+
         label {
+
             display: block;
 
             font-weight: bold;
 
             margin-top: 18px;
+
             margin-bottom: 7px;
 
             color: #333;
         }
 
+
         input,
         textarea {
+
             width: 100%;
 
             padding: 14px;
 
-            border: 1px solid #ccc;
+            border:
+                1px solid #ccc;
+
             border-radius: 12px;
 
             font-size: 16px;
@@ -96,34 +140,47 @@
             outline: none;
         }
 
+
         input:focus,
         textarea:focus {
+
             border-color: #0865c5;
         }
 
+
         textarea {
+
             min-height: 110px;
+
             resize: vertical;
         }
+
 
         /* ЗВЁЗДЫ */
 
         .stars {
+
             display: flex;
+
             flex-direction: row-reverse;
 
             justify-content: center;
 
             gap: 5px;
 
-            margin: 10px 0 20px;
+            margin:
+                10px 0 20px;
         }
 
+
         .stars input {
+
             display: none;
         }
 
+
         .stars label {
+
             margin: 0;
 
             font-size: 45px;
@@ -133,21 +190,27 @@
             cursor: pointer;
         }
 
+
         .stars label:hover,
         .stars label:hover ~ label,
         .stars input:checked ~ label {
+
             color: #ffc107;
         }
+
 
         /* КНОПКА */
 
         button {
+
             width: 100%;
 
             border: none;
+
             border-radius: 12px;
 
             background: #0865c5;
+
             color: white;
 
             padding: 16px;
@@ -155,23 +218,23 @@
             margin-top: 20px;
 
             font-size: 17px;
+
             font-weight: bold;
 
             cursor: pointer;
         }
 
+
         button:hover {
+
             background: #064d98;
         }
 
-        button:disabled {
-            background: #999;
-            cursor: not-allowed;
-        }
 
-        /* УСПЕШНАЯ ОТПРАВКА */
+        /* УСПЕХ */
 
         .success {
+
             display: none;
 
             text-align: center;
@@ -179,15 +242,21 @@
             padding: 20px;
         }
 
+
         .success-icon {
+
             font-size: 65px;
         }
 
+
         .success h2 {
+
             color: #16833b;
         }
 
+
         .footer {
+
             text-align: center;
 
             color: #999;
@@ -196,24 +265,40 @@
 
             margin-top: 18px;
         }
+
+
+        .loading {
+
+            opacity: .6;
+
+            pointer-events: none;
+        }
+
     </style>
+
 </head>
+
 
 <body>
 
+
 <div class="card">
+
 
     <!-- ФОРМА -->
 
     <div id="formBlock">
 
+
         <div class="logo">
             ★
         </div>
 
+
         <h1>
             Оценка сотрудника
         </h1>
+
 
         <div class="subtitle">
             Оцените качество обслуживания
@@ -223,38 +308,46 @@
         <!-- ПУНКТ ПРОПУСКА -->
 
         <label for="checkpoint">
+
             📍 Пункт пропуска
+
         </label>
+
 
         <input
             type="text"
             id="checkpoint"
             placeholder="Введите пункт пропуска"
-            maxlength="100"
         >
 
 
         <!-- ФИО -->
 
         <label for="employee">
+
             👤 ФИО сотрудника
+
         </label>
+
 
         <input
             type="text"
             id="employee"
             placeholder="Введите ФИО сотрудника"
-            maxlength="150"
         >
 
 
         <!-- ОЦЕНКА -->
 
         <label>
+
             ⭐ Оценка работы
+
         </label>
 
+
         <div class="stars">
+
 
             <input
                 type="radio"
@@ -263,7 +356,9 @@
                 value="5"
             >
 
-            <label for="star5">★</label>
+            <label for="star5">
+                ★
+            </label>
 
 
             <input
@@ -273,7 +368,9 @@
                 value="4"
             >
 
-            <label for="star4">★</label>
+            <label for="star4">
+                ★
+            </label>
 
 
             <input
@@ -283,7 +380,9 @@
                 value="3"
             >
 
-            <label for="star3">★</label>
+            <label for="star3">
+                ★
+            </label>
 
 
             <input
@@ -293,7 +392,9 @@
                 value="2"
             >
 
-            <label for="star2">★</label>
+            <label for="star2">
+                ★
+            </label>
 
 
             <input
@@ -303,7 +404,9 @@
                 value="1"
             >
 
-            <label for="star1">★</label>
+            <label for="star1">
+                ★
+            </label>
 
         </div>
 
@@ -311,13 +414,15 @@
         <!-- КОММЕНТАРИЙ -->
 
         <label for="comment">
+
             💬 Комментарий
+
         </label>
+
 
         <textarea
             id="comment"
             placeholder="Напишите отзыв или замечание..."
-            maxlength="1000"
         ></textarea>
 
 
@@ -327,13 +432,19 @@
             id="sendButton"
             onclick="sendRating()"
         >
+
             Отправить оценку
+
         </button>
 
 
         <div class="footer">
-            Ваш отзыв помогает улучшать качество обслуживания
+
+            Ваш отзыв помогает
+            улучшать качество обслуживания
+
         </div>
+
 
     </div>
 
@@ -345,50 +456,62 @@
         id="successBlock"
     >
 
+
         <div class="success-icon">
             ✅
         </div>
+
 
         <h2>
             Спасибо за оценку!
         </h2>
 
+
         <p>
             Ваша оценка успешно отправлена.
         </p>
 
-        <button onclick="location.reload()">
+
+        <button
+            onclick="location.reload()"
+        >
+
             Новая оценка
+
         </button>
 
+
     </div>
+
 
 </div>
 
 
 <script>
 
+
 async function sendRating() {
+
 
     const checkpoint =
         document
-            .getElementById("checkpoint")
-            .value
-            .trim();
+        .getElementById("checkpoint")
+        .value
+        .trim();
 
 
     const employee =
         document
-            .getElementById("employee")
-            .value
-            .trim();
+        .getElementById("employee")
+        .value
+        .trim();
 
 
     const comment =
         document
-            .getElementById("comment")
-            .value
-            .trim();
+        .getElementById("comment")
+        .value
+        .trim();
 
 
     const ratingElement =
@@ -397,7 +520,7 @@ async function sendRating() {
         );
 
 
-    /* Проверка пункта пропуска */
+    /* Проверка пункта */
 
     if (!checkpoint) {
 
@@ -434,7 +557,9 @@ async function sendRating() {
 
 
     const rating =
-        Number(ratingElement.value);
+        Number(
+            ratingElement.value
+        );
 
 
     /* Данные */
@@ -452,7 +577,7 @@ async function sendRating() {
     };
 
 
-    const sendButton =
+    const button =
         document.getElementById(
             "sendButton"
         );
@@ -460,30 +585,34 @@ async function sendRating() {
 
     try {
 
-        /* Блокируем кнопку */
 
-        sendButton.disabled = true;
+        button.disabled = true;
 
-        sendButton.textContent =
+        button.textContent =
             "Отправка...";
 
 
-        /* Отправляем данные Python */
-
         const response =
             await fetch(
+
                 "https://employee-rating-1.onrender.com/api/rating",
+
                 {
+
                     method: "POST",
 
                     headers: {
+
                         "Content-Type":
                             "application/json"
+
                     },
 
                     body:
                         JSON.stringify(data)
+
                 }
+
             );
 
 
@@ -497,6 +626,7 @@ async function sendRating() {
         ) {
 
             throw new Error(
+                result.message ||
                 "Сервер не принял оценку"
             );
 
@@ -515,40 +645,45 @@ async function sendRating() {
             .getElementById(
                 "formBlock"
             )
-            .style.display = "none";
+            .style.display =
+            "none";
 
 
         document
             .getElementById(
                 "successBlock"
             )
-            .style.display = "block";
+            .style.display =
+            "block";
 
 
-    } catch (error) {
+    }
 
-        console.error(
-            "Ошибка:",
-            error
-        );
+    catch (error) {
+
+
+        console.error(error);
 
 
         alert(
             "❌ Не удалось отправить оценку.\n\n" +
-            "Убедитесь, что Python-сервер запущен."
+            error.message
         );
 
 
-        sendButton.disabled = false;
+        button.disabled = false;
 
-        sendButton.textContent =
+        button.textContent =
             "Отправить оценку";
+
     }
 
 }
 
+
 </script>
 
-</body>
-</html>
 
+</body>
+
+</html>
