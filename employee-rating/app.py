@@ -6,9 +6,12 @@ import sqlite3
 import urllib.parse
 import urllib.request
 from flask import Flask, jsonify, render_template, request
+from flask_cors import CORS
 import pandas as pd
 
 app = Flask(__name__)
+CORS(app)  # Разрешает запросы из Telegram Mini App
+
 DATABASE = "ratings.db"
 
 # Ключевые слова для анализа тональности
@@ -325,7 +328,6 @@ def add_rating():
 
     stars_str = "⭐" * rating
 
-    # Оформление в Telegram
     if rating <= 2:
         msg_text = (
             f"🚨🚨🚨 <b>ВНИМАНИЕ! НЕГАТИВНЫЙ ОТЗЫВ</b> 🚨🚨🚨\n"
