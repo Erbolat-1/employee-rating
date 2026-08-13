@@ -113,6 +113,263 @@
             background-position: center;
         }
 
+
+        .rating-heading-badge {
+            width: max-content;
+            margin: 0 auto 2px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 9px;
+            border-radius: 999px;
+            background: rgba(8,120,232,.08);
+            color: #2777bb;
+            font-size: 9px;
+            font-weight: 900;
+            letter-spacing: 1.1px;
+            opacity: .9;
+        }
+
+        .badge-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #25a35a;
+            box-shadow: 0 0 0 0 rgba(37,163,90,.35);
+            animation: liveDot 1.8s infinite;
+        }
+
+        @keyframes liveDot {
+            0% { box-shadow: 0 0 0 0 rgba(37,163,90,.35); }
+            65% { box-shadow: 0 0 0 7px rgba(37,163,90,0); }
+            100% { box-shadow: 0 0 0 0 rgba(37,163,90,0); }
+        }
+
+
+
+        .rating-copy {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .star-score {
+            flex: 0 0 auto;
+            margin-left: auto;
+            color: #f4c542;
+            font-size: 16px;
+            letter-spacing: 1px;
+            white-space: nowrap;
+            text-shadow: 0 1px 5px rgba(244,197,66,.18);
+            transition: transform .25s ease, filter .25s ease;
+        }
+
+        .rating-option:hover .star-score {
+            transform: scale(1.06);
+            filter: brightness(1.08);
+        }
+
+        .rating-options input:checked + .rating-option .star-score {
+            animation: scoreStars .45s ease-out;
+            filter: drop-shadow(0 2px 5px rgba(244,197,66,.28));
+        }
+
+        @keyframes scoreStars {
+            0% { opacity: .35; transform: scale(.75); }
+            65% { opacity: 1; transform: scale(1.14); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        @media (max-width: 430px) {
+            .rating-option {
+                gap: 9px;
+                padding: 11px 10px;
+            }
+
+            .rating-option .rating-icon {
+                flex-basis: 34px;
+                width: 34px;
+                height: 34px;
+                font-size: 18px;
+            }
+
+            .star-score {
+                font-size: 13px;
+                letter-spacing: .5px;
+            }
+        }
+
+        /* ===== ANIMATED RATING DESIGN ===== */
+        .rating-title {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 42px;
+            margin-bottom: 16px;
+            overflow: hidden;
+            font-size: 20px;
+            letter-spacing: .1px;
+        }
+
+        .rating-title::before {
+            content: "";
+            position: absolute;
+            left: 50%;
+            bottom: -2px;
+            width: 74%;
+            height: 2px;
+            transform: translateX(-50%) scaleX(.25);
+            transform-origin: center;
+            border-radius: 999px;
+            background: linear-gradient(90deg, transparent, #f4c542, #fff, #f4c542, transparent);
+            opacity: .8;
+            animation: titleLine 2.6s ease-in-out infinite;
+        }
+
+        .rating-title::after {
+            content: "✦";
+            position: absolute;
+            top: -9px;
+            right: 11%;
+            color: #f4c542;
+            font-size: 13px;
+            opacity: 0;
+            animation: sparkle 2.8s ease-in-out infinite;
+        }
+
+        .rating-title > span:first-child {
+            display: inline-block;
+            animation: titleFloat 2.8s ease-in-out infinite;
+        }
+
+        @keyframes titleFloat {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-2px); }
+        }
+
+        @keyframes titleLine {
+            0%, 100% { transform: translateX(-50%) scaleX(.25); opacity: .35; }
+            50% { transform: translateX(-50%) scaleX(1); opacity: .9; }
+        }
+
+        @keyframes sparkle {
+            0%, 65%, 100% { opacity: 0; transform: translate(0, 5px) scale(.5) rotate(0); }
+            75% { opacity: 1; transform: translate(-7px, 0) scale(1.15) rotate(20deg); }
+            88% { opacity: .2; transform: translate(-16px, -7px) scale(.65) rotate(45deg); }
+        }
+
+        .rating-box {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .rating-box::before {
+            content: "";
+            position: absolute;
+            top: -90px;
+            left: -130px;
+            width: 90px;
+            height: 280px;
+            transform: rotate(24deg);
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(255,255,255,.72),
+                transparent
+            );
+            animation: shine 4.8s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        @keyframes shine {
+            0%, 55% { left: -150px; opacity: 0; }
+            62% { opacity: 1; }
+            78% { left: 115%; opacity: 0; }
+            100% { left: 115%; opacity: 0; }
+        }
+
+        .rating-option {
+            position: relative;
+            overflow: hidden;
+            transform: translateZ(0);
+        }
+
+        .rating-option::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            transform: translateX(-110%);
+            background: linear-gradient(
+                105deg,
+                transparent 25%,
+                rgba(255,255,255,.48) 50%,
+                transparent 75%
+            );
+            transition: transform .55s ease;
+            pointer-events: none;
+        }
+
+        .rating-option:hover::after {
+            transform: translateX(110%);
+        }
+
+        .rating-option .rating-icon {
+            transition: transform .25s ease, box-shadow .25s ease;
+        }
+
+        .rating-option:hover .rating-icon {
+            transform: rotate(-8deg) scale(1.08);
+        }
+
+        .rating-options input:checked + .rating-option {
+            animation: selectedPulse .42s ease-out;
+        }
+
+        .rating-options input:checked + .rating-option .rating-icon {
+            animation: iconPop .5s cubic-bezier(.2,.9,.25,1.4);
+            box-shadow: 0 5px 16px rgba(244,197,66,.22);
+        }
+
+        @keyframes selectedPulse {
+            0% { transform: scale(.985); }
+            55% { transform: scale(1.012); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes iconPop {
+            0% { transform: scale(.7) rotate(-12deg); }
+            65% { transform: scale(1.16) rotate(6deg); }
+            100% { transform: scale(1) rotate(0); }
+        }
+
+        .rating-text {
+            transition: opacity .2s ease, transform .2s ease;
+        }
+
+        .rating-text.active {
+            animation: ratingTextIn .3s ease-out;
+        }
+
+        @keyframes ratingTextIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .rating-title,
+            .rating-title::before,
+            .rating-title::after,
+            .rating-box::before,
+            .rating-option::after,
+            .rating-options input:checked + .rating-option,
+            .rating-options input:checked + .rating-option .rating-icon,
+            .rating-text {
+                animation: none !important;
+                transition: none !important;
+            }
+        }
+
         @media (max-width: 600px) {
             body::before,
             body::after {
@@ -600,43 +857,51 @@
         </div>
 
         <div class="rating-box" id="ratingBox">
+            <div class="rating-heading-badge" aria-hidden="true">
+                <span class="badge-dot"></span>
+                <span>LIVE</span>
+            </div>
             <p class="rating-title" data-i18n="ratingTitle">⭐ Оценка работы <span class="required">*</span></p>
 
             <div class="rating-options" role="radiogroup" aria-label="Выберите оценку">
                 <input type="radio" name="rating" id="ratingExcellent" value="5">
                 <label class="rating-option excellent" for="ratingExcellent">
                     <span class="rating-icon">⭐</span>
-                    <span>
+                    <span class="rating-copy">
                         <strong data-i18n="excellent">Отлично</strong>
                         <small data-i18n="excellentSub">Отличное обслуживание</small>
                     </span>
+                    <span class="star-score" aria-label="5 stars">★★★★★</span>
                 </label>
 
                 <input type="radio" name="rating" id="ratingGood" value="4">
                 <label class="rating-option good" for="ratingGood">
                     <span class="rating-icon">⭐</span>
-                    <span>
+                    <span class="rating-copy">
                         <strong data-i18n="good">Хорошо</strong>
                         <small data-i18n="goodSub">Хорошее обслуживание</small>
                     </span>
+                    <span class="star-score" aria-label="4 stars">★★★★</span>
                 </label>
 
                 <input type="radio" name="rating" id="ratingBad" value="2">
                 <label class="rating-option bad" for="ratingBad">
                     <span class="rating-icon">⭐</span>
-                    <span>
+                    <span class="rating-copy">
                         <strong data-i18n="bad">Плохо</strong>
                         <small data-i18n="badSub">Есть замечания</small>
                     </span>
+                    <span class="star-score" aria-label="2 stars">★★</span>
                 </label>
 
                 <input type="radio" name="rating" id="ratingRude" value="1">
                 <label class="rating-option rude" for="ratingRude">
                     <span class="rating-icon">⭐</span>
-                    <span>
+                    <span class="rating-copy">
                         <strong data-i18n="rude">Грубо / грубое обслуживание</strong>
                         <small data-i18n="rudeSub">Сотрудник общался грубо</small>
                     </span>
+                    <span class="star-score" aria-label="1 star">★</span>
                 </label>
             </div>
 
@@ -684,7 +949,7 @@
     const translations = {
         ru: {
             title: "Оценка работы сотрудника",
-            subtitle: "Оцените качество обслуживания — это поможет нам стать лучше.",
+            subtitle: "Оценка качество работы обслуживания — это поможет нам стать лучше.",
             checkpointLabel: "📍 Пункт пропуска",
             checkpointPlaceholder: "Введите название пункта пропуска",
             employeeLabel: "👤 ФИО сотрудника",
@@ -696,7 +961,7 @@
             goodSub: "Хорошее обслуживание",
             bad: "Пренебрежительное отношение",
             badSub: "Есть замечания",
-            rude: "Грубо /  обслуживание",
+            rude: "Низкое качество обслуживания / грубое обслуживание",
             rudeSub: "Сотрудник общался грубо",
             chooseRating: "Выберите один вариант",
             commentLabel: "💬 Комментарий",
@@ -997,6 +1262,9 @@
             const rating = Number(input.value);
             const key = {5:"excellentRating",4:"goodRating",2:"badRating",1:"rudeRating"}[rating];
             ratingText.textContent = t(key);
+            ratingText.classList.remove("active");
+            void ratingText.offsetWidth;
+            ratingText.classList.add("active");
             ratingBox.classList.remove("invalid");
             hideError();
         });
