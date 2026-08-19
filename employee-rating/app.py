@@ -469,7 +469,7 @@ def send_last(chat_id):
 
     for row in rows:
         result.append(
-            f"📍 <b>КПП:</b> {escape_telegram(row['checkpoint'])}\n"
+            f"📍 <b>пункт пропуска:</b> {escape_telegram(row['checkpoint'])}\n"
             f"👤 <b>Сотрудник:</b> "
             f"{escape_telegram(row['employee_name'])}\n"
             f"⭐ <b>Оценка:</b> "
