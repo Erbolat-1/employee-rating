@@ -4,23 +4,34 @@ import os
 import re
 import sqlite3
 import urllib.request
+import urllib.parse
+import hashlib
+import hmac
 import html
 from datetime import datetime, timezone
 
 import pandas as pd
-from flask import Flask, jsonify, request, send_from_directory, render_template
+from flask import (
+    Flask, jsonify, request, send_from_directory,
+    render_template, abort
+)
 from flask_cors import CORS
 
 
 # ============================================================
-# EMPLOYEE RATING — RENDER + TELEGRAM MINI APP
-# UPDATED:
-# - Jinja render_template for report_webapp.html
-# - report selection
-# - single delete with confirmation
-# - bulk delete
-# - Telegram report list + delete/confirm buttons
-# - Telegram admin protection for destructive commands
+# EMPLOYEE RATING
+# Просмотр + защищённый редактор Mini App
+#
+# РЕЖИМЫ:
+#   /reports/view   — просмотр
+#   /reports/edit   — редактор (только Telegram-администратор)
+#
+# Telegram admin IDs:
+#   ADMIN_TELEGRAM_IDS=123456789,987654321
+#
+# Также поддерживаются:
+#   /webapp/report       -> просмотр
+#   /webapp/report/edit  -> редактор
 # ============================================================
 
 app = Flask(__name__)
@@ -44,9 +55,6 @@ SERVER_URL = (
 
 WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "").strip()
 
-# Optional comma-separated Telegram user IDs allowed to delete reports.
-# Example: ADMIN_TELEGRAM_IDS=123456789,987654321
-# If empty, destructive Telegram commands are allowed only in CHAT_ID.
 ADMIN_TELEGRAM_IDS = {
     x.strip()
     for x in os.environ.get("ADMIN_TELEGRAM_IDS", "").split(",")
@@ -136,7 +144,7 @@ def analyze_text(text):
 
 
 # ============================================================
-# HELPERS
+# HELPERS / AUTH
 # ============================================================
 
 def escape_telegram(value):
@@ -145,16 +153,6 @@ def escape_telegram(value):
 
 def get_server_url():
     return SERVER_URL or "http://127.0.0.1:5000"
-
-
-def is_telegram_admin(user_id=None, chat_id=None):
-    user_id = str(user_id or "")
-    chat_id = str(chat_id or "")
-
-    if ADMIN_TELEGRAM_IDS:
-        return user_id in ADMIN_TELEGRAM_IDS
-
-    return bool(CHAT_ID and chat_id == CHAT_ID)
 
 
 def format_rating_stars(rating):
@@ -174,6 +172,100 @@ def get_rating_by_id(rating_id):
             WHERE id = ?
         """, (rating_id,)).fetchone()
     return dict(row) if row else None
+
+
+def telegram_admin_id_allowed(user_id):
+    user_id = str(user_id or "")
+    if ADMIN_TELEGRAM_IDS:
+        return user_id in ADMIN_TELEGRAM_IDS
+    return bool(CHAT_ID and user_id == CHAT_ID)
+
+
+def telegram_init_data_user(init_data):
+    """
+    Проверяет Telegram WebApp initData.
+    Возвращает Telegram user id или None.
+    """
+    if not init_data or not BOT_TOKEN:
+        return None
+
+    try:
+        parsed = urllib.parse.parse_qs(init_data, strict_parsing=True)
+        received_hash = parsed.get("hash", [None])[0]
+
+        if not received_hash:
+            return None
+
+        data_check = []
+        for key in sorted(parsed.keys()):
+            if key == "hash":
+                continue
+            values = parsed.get(key, [])
+            if not values:
+                continue
+            data_check.append(f"{key}={values[0]}")
+
+        data_check_string = "\n".join(data_check)
+
+        secret_key = hmac.new(
+            b"WebAppData",
+            BOT_TOKEN.encode("utf-8"),
+            hashlib.sha256
+        ).digest()
+
+        calculated_hash = hmac.new(
+            secret_key,
+            data_check_string.encode("utf-8"),
+            hashlib.sha256
+        ).hexdigest()
+
+        if not hmac.compare_digest(calculated_hash, received_hash):
+            return None
+
+        user_raw = parsed.get("user", [None])[0]
+        if not user_raw:
+            return None
+
+        user = json.loads(user_raw)
+        return str(user.get("id", "")) or None
+
+    except Exception as exc:
+        print("[Auth] initData error:", exc)
+        return None
+
+
+def get_request_telegram_user():
+    init_data = request.headers.get("X-Telegram-Init-Data", "").strip()
+    return telegram_init_data_user(init_data)
+
+
+def require_editor():
+    user_id = get_request_telegram_user()
+
+    if not user_id:
+        return None, (
+            jsonify({
+                "success": False,
+                "error": "AUTH_REQUIRED",
+                "message": (
+                    "Редактор доступен только из Telegram Mini App "
+                    "для администратора."
+                )
+            }),
+            401
+        )
+
+    if not telegram_admin_id_allowed(user_id):
+        return None, (
+            jsonify({
+                "success": False,
+                "error": "FORBIDDEN",
+                "message": "Недостаточно прав для редактирования."
+            }),
+            403
+        )
+
+    return user_id, None
 
 
 # ============================================================
@@ -200,9 +292,7 @@ def telegram_request(method, payload, timeout=10):
 
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
-            data = json.loads(
-                response.read().decode("utf-8")
-            )
+            data = json.loads(response.read().decode("utf-8"))
             return bool(data.get("ok")), data
     except Exception as exc:
         print(f"[Telegram] {method}: {exc}")
@@ -225,10 +315,7 @@ def telegram_message(text, chat_id=None, reply_markup=None):
     if reply_markup:
         payload["reply_markup"] = reply_markup
 
-    ok, result = telegram_request(
-        "sendMessage",
-        payload
-    )
+    ok, result = telegram_request("sendMessage", payload)
 
     if not ok:
         print("[Telegram] sendMessage failed:", result)
@@ -247,10 +334,7 @@ def telegram_edit_message(chat_id, message_id, text, reply_markup=None):
     if reply_markup is not None:
         payload["reply_markup"] = reply_markup
 
-    ok, result = telegram_request(
-        "editMessageText",
-        payload
-    )
+    ok, result = telegram_request("editMessageText", payload)
 
     if not ok:
         print("[Telegram] editMessageText failed:", result)
@@ -258,19 +342,19 @@ def telegram_edit_message(chat_id, message_id, text, reply_markup=None):
     return ok
 
 
-def telegram_delete_message(chat_id, message_id):
-    ok, result = telegram_request(
-        "deleteMessage",
-        {
-            "chat_id": chat_id,
-            "message_id": message_id
-        }
+def telegram_answer_callback(callback_id, text=None, show_alert=False):
+    payload = {
+        "callback_query_id": callback_id,
+        "show_alert": show_alert
+    }
+    if text:
+        payload["text"] = text
+
+    return telegram_request(
+        "answerCallbackQuery",
+        payload,
+        timeout=5
     )
-
-    if not ok:
-        print("[Telegram] deleteMessage failed:", result)
-
-    return ok
 
 
 # ============================================================
@@ -278,42 +362,35 @@ def telegram_delete_message(chat_id, message_id):
 # ============================================================
 
 def main_keyboard():
-    app_url = f"{get_server_url()}/webapp/report"
+    view_url = f"{get_server_url()}/reports/view"
+    edit_url = f"{get_server_url()}/reports/edit"
 
-    return {
-        "inline_keyboard": [
-            [
-                {
-                    "text": "📊 Открыть Mini App",
-                    "web_app": {
-                        "url": app_url
-                    }
-                }
-            ],
-            [
-                {
-                    "text": "📈 Статистика",
-                    "callback_data": "report"
-                },
-                {
-                    "text": "📋 Последние",
-                    "callback_data": "last"
-                }
-            ],
-            [
-                {
-                    "text": "🗑 Управление отчётами",
-                    "callback_data": "reports"
-                }
-            ],
-            [
-                {
-                    "text": "📥 Excel",
-                    "callback_data": "excel"
-                }
-            ]
+    rows = [
+        [
+            {
+                "text": "👁 Просмотр отчётов",
+                "web_app": {"url": view_url}
+            }
+        ],
+        [
+            {
+                "text": "✏️ Редактор",
+                "web_app": {"url": edit_url}
+            }
+        ],
+        [
+            {"text": "📈 Статистика", "callback_data": "report"},
+            {"text": "📋 Последние", "callback_data": "last"}
+        ],
+        [
+            {"text": "🗑 Управление", "callback_data": "reports"}
+        ],
+        [
+            {"text": "📥 Excel", "callback_data": "excel"}
         ]
-    }
+    ]
+
+    return {"inline_keyboard": rows}
 
 
 def reports_keyboard(rows):
@@ -332,10 +409,7 @@ def reports_keyboard(rows):
         ])
 
     buttons.append([
-        {
-            "text": "🔄 Обновить",
-            "callback_data": "reports"
-        }
+        {"text": "🔄 Обновить", "callback_data": "reports"}
     ])
 
     return {"inline_keyboard": buttons}
@@ -388,23 +462,18 @@ def send_last(chat_id):
         """).fetchall()
 
     if not rows:
-        telegram_message(
-            "ℹ️ Отзывов пока нет.",
-            chat_id
-        )
+        telegram_message("ℹ️ Отзывов пока нет.", chat_id)
         return
 
     result = ["📋 <b>Последние отзывы</b>\n"]
 
     for row in rows:
         result.append(
-            f"📍 <b>КПП:</b> "
-            f"{escape_telegram(row['checkpoint'])}\n"
+            f"📍 <b>КПП:</b> {escape_telegram(row['checkpoint'])}\n"
             f"👤 <b>Сотрудник:</b> "
             f"{escape_telegram(row['employee_name'])}\n"
             f"⭐ <b>Оценка:</b> "
-            f"{format_rating_stars(row['rating'])} "
-            f"({row['rating']}/5)\n"
+            f"{format_rating_stars(row['rating'])} ({row['rating']}/5)\n"
             f"🎭 <b>Тональность:</b> "
             f"{escape_telegram(row['sentiment'])}\n"
             f"💬 {escape_telegram(row['comment'])}\n"
@@ -412,10 +481,7 @@ def send_last(chat_id):
             "──────────────────"
         )
 
-    telegram_message(
-        "\n".join(result),
-        chat_id
-    )
+    telegram_message("\n".join(result), chat_id)
 
 
 def send_reports_manager(chat_id):
@@ -439,7 +505,7 @@ def send_reports_manager(chat_id):
         "🗑 <b>УПРАВЛЕНИЕ ОТЧЁТАМИ</b>",
         "",
         f"Показаны последние {len(rows)} записей.",
-        "Нажмите кнопку нужного отчёта для удаления."
+        "Нажмите нужный отчёт для подтверждения удаления."
     ]
 
     for row in rows:
@@ -469,13 +535,11 @@ def send_delete_confirmation(chat_id, rating_id):
     text = (
         "⚠️ <b>ПОДТВЕРЖДЕНИЕ УДАЛЕНИЯ</b>\n\n"
         f"🆔 Отчёт №<b>{row['id']}</b>\n"
-        f"📍 <b>КПП:</b> "
-        f"{escape_telegram(row['checkpoint'])}\n"
+        f"📍 <b>КПП:</b> {escape_telegram(row['checkpoint'])}\n"
         f"👤 <b>Сотрудник:</b> "
         f"{escape_telegram(row['employee_name'])}\n"
         f"⭐ <b>Оценка:</b> "
-        f"{format_rating_stars(row['rating'])} "
-        f"({row['rating']}/5)\n"
+        f"{format_rating_stars(row['rating'])} ({row['rating']}/5)\n"
         f"💬 <b>Отзыв:</b> "
         f"{escape_telegram(row['comment'])}\n"
         f"🕒 <b>Дата:</b> "
@@ -546,23 +610,13 @@ def send_excel(chat_id):
         """, conn)
 
     if df.empty:
-        telegram_message(
-            "ℹ️ В базе пока нет отзывов.",
-            chat_id
-        )
+        telegram_message("ℹ️ В базе пока нет отзывов.", chat_id)
         return
 
     output = io.BytesIO()
 
-    with pd.ExcelWriter(
-        output,
-        engine="openpyxl"
-    ) as writer:
-        df.to_excel(
-            writer,
-            index=False,
-            sheet_name="Отзывы"
-        )
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Отзывы")
 
     output.seek(0)
 
@@ -590,20 +644,14 @@ def send_excel(chat_id):
         f"Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\r\n\r\n"
         .encode("utf-8")
     )
-
     parts.append(output.getvalue())
-    parts.append(
-        f"\r\n--{boundary}--\r\n".encode("utf-8")
-    )
-
-    payload = b"".join(parts)
+    parts.append(f"\r\n--{boundary}--\r\n".encode("utf-8"))
 
     req = urllib.request.Request(
         f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument",
-        data=payload,
+        data=b"".join(parts),
         headers={
-            "Content-Type":
-                f"multipart/form-data; boundary={boundary}"
+            "Content-Type": f"multipart/form-data; boundary={boundary}"
         },
         method="POST"
     )
@@ -623,13 +671,9 @@ def process_update(update):
     message = update.get("message")
 
     if message:
-        chat_id = str(
-            message.get("chat", {}).get("id", "")
-        )
-
+        chat_id = str(message.get("chat", {}).get("id", ""))
         from_user = message.get("from", {})
         user_id = str(from_user.get("id", ""))
-
         text = message.get("text", "").strip()
 
         if text.startswith("/"):
@@ -638,17 +682,41 @@ def process_update(update):
             if command == "/start":
                 telegram_message(
                     "👋 <b>Система оценки сотрудников</b>\n\n"
-                    "Выберите действие:",
+                    "Выберите режим:",
                     chat_id,
                     main_keyboard()
                 )
 
             elif command in ("/app", "/view"):
                 telegram_message(
-                    "📊 <b>Открыть интерактивное приложение:</b>",
+                    "👁 <b>Просмотр отчётов</b>\n\n"
+                    "Для изменения данных используйте "
+                    "«✏️ Редактор» и права администратора.",
                     chat_id,
                     main_keyboard()
                 )
+
+            elif command == "/edit":
+                if not telegram_admin_id_allowed(user_id):
+                    telegram_message(
+                        "⛔ <b>Недостаточно прав.</b>",
+                        chat_id
+                    )
+                else:
+                    telegram_message(
+                        "✏️ <b>Редактор отчётов</b>",
+                        chat_id,
+                        {
+                            "inline_keyboard": [[
+                                {
+                                    "text": "✏️ Открыть редактор",
+                                    "web_app": {
+                                        "url": f"{get_server_url()}/reports/edit"
+                                    }
+                                }
+                            ]]
+                        }
+                    )
 
             elif command in ("/report", "/stats"):
                 send_report(chat_id)
@@ -657,7 +725,7 @@ def process_update(update):
                 send_last(chat_id)
 
             elif command in ("/reports", "/delete_report"):
-                if not is_telegram_admin(user_id, chat_id):
+                if not telegram_admin_id_allowed(user_id):
                     telegram_message(
                         "⛔ <b>Недостаточно прав.</b>\n"
                         "Управление отчётами доступно только администратору.",
@@ -670,30 +738,21 @@ def process_update(update):
                 send_excel(chat_id)
 
             elif command == "/delete_last":
-                if not is_telegram_admin(user_id, chat_id):
-                    telegram_message(
-                        "⛔ Недостаточно прав.",
-                        chat_id
-                    )
+                if not telegram_admin_id_allowed(user_id):
+                    telegram_message("⛔ Недостаточно прав.", chat_id)
                 else:
                     deleted = delete_last()
-
                     telegram_message(
                         "🗑️ Последняя запись удалена."
-                        if deleted
-                        else "ℹ️ Записей нет.",
+                        if deleted else "ℹ️ Записей нет.",
                         chat_id
                     )
 
             elif command == "/reset_all":
-                if not is_telegram_admin(user_id, chat_id):
-                    telegram_message(
-                        "⛔ Недостаточно прав.",
-                        chat_id
-                    )
+                if not telegram_admin_id_allowed(user_id):
+                    telegram_message("⛔ Недостаточно прав.", chat_id)
                 else:
                     reset_database()
-
                     telegram_message(
                         "🧹 <b>База отзывов полностью очищена.</b>",
                         chat_id
@@ -711,24 +770,16 @@ def process_update(update):
     if callback:
         callback_id = callback.get("id")
         data = callback.get("data", "")
-
         callback_message = callback.get("message", {})
         chat_id = str(
             callback_message.get("chat", {}).get("id", "")
         )
         message_id = callback_message.get("message_id")
-
         from_user = callback.get("from", {})
         user_id = str(from_user.get("id", ""))
 
         if callback_id:
-            telegram_request(
-                "answerCallbackQuery",
-                {
-                    "callback_query_id": callback_id
-                },
-                timeout=5
-            )
+            telegram_answer_callback(callback_id)
 
         if data == "report":
             send_report(chat_id)
@@ -737,10 +788,11 @@ def process_update(update):
             send_last(chat_id)
 
         elif data == "reports":
-            if not is_telegram_admin(user_id, chat_id):
-                telegram_message(
-                    "⛔ Недостаточно прав.",
-                    chat_id
+            if not telegram_admin_id_allowed(user_id):
+                telegram_answer_callback(
+                    callback_id,
+                    "Недостаточно прав",
+                    True
                 )
             else:
                 send_reports_manager(chat_id)
@@ -749,10 +801,11 @@ def process_update(update):
             send_excel(chat_id)
 
         elif data.startswith("delete_report:"):
-            if not is_telegram_admin(user_id, chat_id):
-                telegram_message(
-                    "⛔ Недостаточно прав.",
-                    chat_id
+            if not telegram_admin_id_allowed(user_id):
+                telegram_answer_callback(
+                    callback_id,
+                    "Недостаточно прав",
+                    True
                 )
             else:
                 try:
@@ -761,16 +814,14 @@ def process_update(update):
                     rating_id = 0
 
                 if rating_id:
-                    send_delete_confirmation(
-                        chat_id,
-                        rating_id
-                    )
+                    send_delete_confirmation(chat_id, rating_id)
 
         elif data.startswith("confirm_delete:"):
-            if not is_telegram_admin(user_id, chat_id):
-                telegram_message(
-                    "⛔ Недостаточно прав.",
-                    chat_id
+            if not telegram_admin_id_allowed(user_id):
+                telegram_answer_callback(
+                    callback_id,
+                    "Недостаточно прав",
+                    True
                 )
                 return
 
@@ -784,29 +835,23 @@ def process_update(update):
 
             deleted = delete_rating_from_db(rating_id)
 
-            if deleted:
-                text = (
-                    f"✅ <b>Отчёт №{rating_id} удалён.</b>\n\n"
-                    "Данные удалены из базы."
-                )
-            else:
-                text = (
-                    f"ℹ️ Отчёт №{rating_id} уже отсутствует."
-                )
+            text = (
+                f"✅ <b>Отчёт №{rating_id} удалён.</b>"
+                if deleted
+                else f"ℹ️ Отчёт №{rating_id} уже отсутствует."
+            )
 
             telegram_edit_message(
                 chat_id,
                 message_id,
                 text,
                 {
-                    "inline_keyboard": [
-                        [
-                            {
-                                "text": "📊 К списку отчётов",
-                                "callback_data": "reports"
-                            }
-                        ]
-                    ]
+                    "inline_keyboard": [[
+                        {
+                            "text": "📊 К списку отчётов",
+                            "callback_data": "reports"
+                        }
+                    ]]
                 }
             )
 
@@ -823,32 +868,18 @@ def process_update(update):
 # ============================================================
 
 def set_webhook():
-    if not BOT_TOKEN:
-        print("[Webhook] BOT_TOKEN missing")
+    if not BOT_TOKEN or not SERVER_URL:
+        print("[Webhook] BOT_TOKEN or SERVER_URL missing")
         return False
 
-    if not SERVER_URL:
-        print("[Webhook] SERVER_URL/RENDER_EXTERNAL_URL missing")
-        return False
-
-    payload = {
-        "url": f"{SERVER_URL}/webhook"
-    }
+    payload = {"url": f"{SERVER_URL}/webhook"}
 
     if WEBHOOK_SECRET:
         payload["secret_token"] = WEBHOOK_SECRET
 
-    ok, result = telegram_request(
-        "setWebhook",
-        payload
-    )
+    ok, result = telegram_request("setWebhook", payload)
 
-    print(
-        "[Webhook]",
-        "OK" if ok else "ERROR",
-        result
-    )
-
+    print("[Webhook]", "OK" if ok else "ERROR", result)
     return ok
 
 
@@ -866,20 +897,55 @@ ORIGINAL_HTML_CANDIDATES = [
 
 def find_original_html():
     for filename in ORIGINAL_HTML_CANDIDATES:
-        path = os.path.join(
-            TEMPLATES_DIR,
-            filename
-        )
-
+        path = os.path.join(TEMPLATES_DIR, filename)
         if os.path.isfile(path):
             return filename
-
     return None
 
 
-# ============================================================
-# ROUTES
-# ============================================================
+def render_reports(mode):
+    if not os.path.isfile(
+        os.path.join(TEMPLATES_DIR, "report_webapp.html")
+    ):
+        return jsonify({
+            "success": False,
+            "error": "REPORT_HTML_NOT_FOUND",
+            "message": "Файл report_webapp.html не найден."
+        }), 404
+
+    if mode == "edit":
+        user_id = get_request_telegram_user()
+
+        # Для самой страницы нельзя отправить заголовок через web_app URL,
+        # поэтому HTML открывается, а JS получает initData и запрашивает
+        # данные/права через API. Это позволяет показать понятный экран входа.
+        editor_allowed = bool(
+            user_id and telegram_admin_id_allowed(user_id)
+        )
+    else:
+        editor_allowed = False
+
+    with get_db() as conn:
+        rows = conn.execute("""
+            SELECT id, checkpoint, employee_name, comment,
+                   rating, sentiment, word_count, created_at
+            FROM ratings
+            ORDER BY id DESC
+        """).fetchall()
+
+        count = len(rows)
+        avg = conn.execute(
+            "SELECT AVG(rating) FROM ratings"
+        ).fetchone()[0]
+
+    return render_template(
+        "report_webapp.html",
+        ratings=[dict(row) for row in rows],
+        average=round(avg, 2) if avg else 0,
+        mode=mode,
+        editor_allowed=editor_allowed
+    )
+
 
 @app.route("/")
 def index():
@@ -889,62 +955,34 @@ def index():
         return jsonify({
             "success": False,
             "error": "HTML_NOT_FOUND",
-            "message": (
-                "Оригинальный HTML не найден. "
-                "Помести HTML в папку templates."
-            )
+            "message": "Помести основной HTML в папку templates."
         }), 500
 
-    return send_from_directory(
-        TEMPLATES_DIR,
-        filename
-    )
+    return send_from_directory(TEMPLATES_DIR, filename)
+
+
+@app.route("/reports/view")
+def reports_view():
+    return render_reports("view")
+
+
+@app.route("/reports/edit")
+def reports_edit():
+    return render_reports("edit")
 
 
 @app.route("/webapp/report")
 def webapp_report():
-    report_path = os.path.join(
-        TEMPLATES_DIR,
-        "report_webapp.html"
-    )
+    return render_reports("view")
 
-    if not os.path.isfile(report_path):
-        return jsonify({
-            "success": False,
-            "error": "REPORT_HTML_NOT_FOUND",
-            "message": "Файл report_webapp.html не найден."
-        }), 404
 
-    with get_db() as conn:
-        rows = conn.execute("""
-            SELECT
-                id,
-                checkpoint,
-                employee_name,
-                comment,
-                rating,
-                sentiment,
-                word_count,
-                created_at
-            FROM ratings
-            ORDER BY id DESC
-        """).fetchall()
-
-        avg = conn.execute(
-            "SELECT AVG(rating) FROM ratings"
-        ).fetchone()[0]
-
-    ratings = [dict(row) for row in rows]
-
-    return render_template(
-        "report_webapp.html",
-        ratings=ratings,
-        average=round(avg, 2) if avg else 0
-    )
+@app.route("/webapp/report/edit")
+def webapp_report_edit():
+    return render_reports("edit")
 
 
 # ============================================================
-# API
+# API — RATINGS
 # ============================================================
 
 @app.route("/api/rating", methods=["POST"])
@@ -952,18 +990,12 @@ def webapp_report():
 def add_rating():
     data = request.get_json(silent=True) or {}
 
-    checkpoint = str(
-        data.get("checkpoint", "")
-    ).strip()
-
+    checkpoint = str(data.get("checkpoint", "")).strip()
     employee = str(
         data.get("employee", "")
         or data.get("employee_name", "")
     ).strip()
-
-    comment = str(
-        data.get("comment", "")
-    ).strip()
+    comment = str(data.get("comment", "")).strip()
 
     try:
         rating = int(data.get("rating", 0))
@@ -996,18 +1028,11 @@ def add_rating():
 
     analysis = analyze_text(comment)
 
-    sentiment = analysis["sentiment"]
-    word_count = analysis["word_count"]
-
     with get_db() as conn:
         cursor = conn.execute("""
             INSERT INTO ratings (
-                checkpoint,
-                employee_name,
-                comment,
-                rating,
-                sentiment,
-                word_count
+                checkpoint, employee_name, comment,
+                rating, sentiment, word_count
             )
             VALUES (?, ?, ?, ?, ?, ?)
         """, (
@@ -1015,8 +1040,8 @@ def add_rating():
             employee,
             comment,
             rating,
-            sentiment,
-            word_count
+            analysis["sentiment"],
+            analysis["word_count"]
         ))
 
         rating_id = cursor.lastrowid
@@ -1036,7 +1061,7 @@ def add_rating():
             f"<i>«{escape_telegram(comment)}»</i>\n\n"
             f"🔴 <b>Оценка:</b> {stars} ({rating}/5)\n"
             f"🎭 <b>Тональность:</b> "
-            f"{escape_telegram(sentiment)}\n\n"
+            f"{escape_telegram(analysis['sentiment'])}\n\n"
             "⚠️ <b>ТРЕБУЕТСЯ РЕАГИРОВАНИЕ "
             "РУКОВОДСТВА!</b>"
         )
@@ -1051,7 +1076,7 @@ def add_rating():
             f"<i>«{escape_telegram(comment)}»</i>\n\n"
             f"⭐ <b>Оценка:</b> {stars} ({rating}/5)\n"
             f"🎭 <b>Тональность:</b> "
-            f"{escape_telegram(sentiment)}"
+            f"{escape_telegram(analysis['sentiment'])}"
         )
 
     telegram_message(telegram_text)
@@ -1061,7 +1086,7 @@ def add_rating():
         "message": "Оценка успешно сохранена!",
         "id": rating_id,
         "rating": rating,
-        "sentiment": sentiment
+        "sentiment": analysis["sentiment"]
     })
 
 
@@ -1069,15 +1094,8 @@ def add_rating():
 def get_ratings():
     with get_db() as conn:
         rows = conn.execute("""
-            SELECT
-                id,
-                checkpoint,
-                employee_name,
-                comment,
-                rating,
-                sentiment,
-                word_count,
-                created_at
+            SELECT id, checkpoint, employee_name, comment,
+                   rating, sentiment, word_count, created_at
             FROM ratings
             ORDER BY id DESC
         """).fetchall()
@@ -1094,30 +1112,131 @@ def get_ratings():
     })
 
 
+@app.route("/api/editor-status", methods=["GET"])
+def editor_status():
+    user_id = get_request_telegram_user()
+
+    return jsonify({
+        "success": True,
+        "authenticated": bool(user_id),
+        "editor": bool(
+            user_id and telegram_admin_id_allowed(user_id)
+        ),
+        "telegram_user_id": user_id if user_id else None
+    })
+
+
+@app.route("/api/ratings/<int:rating_id>", methods=["PUT"])
+def update_rating(rating_id):
+    user_id, error = require_editor()
+    if error:
+        return error
+
+    data = request.get_json(silent=True) or {}
+
+    checkpoint = str(data.get("checkpoint", "")).strip()
+    employee = str(
+        data.get("employee_name", "")
+        or data.get("employee", "")
+    ).strip()
+    comment = str(data.get("comment", "")).strip()
+
+    try:
+        rating = int(data.get("rating", 0))
+    except (TypeError, ValueError):
+        rating = 0
+
+    if not checkpoint:
+        return jsonify({
+            "success": False,
+            "message": "Введите пункт пропуска."
+        }), 400
+
+    if not employee:
+        return jsonify({
+            "success": False,
+            "message": "Введите ФИО сотрудника."
+        }), 400
+
+    if rating not in (1, 2, 3, 4, 5):
+        return jsonify({
+            "success": False,
+            "message": "Оценка должна быть от 1 до 5."
+        }), 400
+
+    if len(comment) > 5000:
+        return jsonify({
+            "success": False,
+            "message": "Комментарий слишком длинный."
+        }), 400
+
+    analysis = analyze_text(comment)
+
+    with get_db() as conn:
+        cursor = conn.execute("""
+            UPDATE ratings
+            SET checkpoint = ?,
+                employee_name = ?,
+                comment = ?,
+                rating = ?,
+                sentiment = ?,
+                word_count = ?
+            WHERE id = ?
+        """, (
+            checkpoint,
+            employee,
+            comment,
+            rating,
+            analysis["sentiment"],
+            analysis["word_count"],
+            rating_id
+        ))
+        conn.commit()
+
+    if cursor.rowcount == 0:
+        return jsonify({
+            "success": False,
+            "message": "Отчёт не найден."
+        }), 404
+
+    return jsonify({
+        "success": True,
+        "message": f"Отчёт №{rating_id} обновлён.",
+        "id": rating_id,
+        "editor_telegram_id": user_id
+    })
+
+
 @app.route("/api/ratings/<int:rating_id>", methods=["DELETE"])
 def delete_rating(rating_id):
+    user_id, error = require_editor()
+    if error:
+        return error
+
     if not get_rating_by_id(rating_id):
         return jsonify({
             "success": False,
             "message": "Запись не найдена."
         }), 404
 
-    with get_db() as conn:
-        cursor = conn.execute(
-            "DELETE FROM ratings WHERE id = ?",
-            (rating_id,)
-        )
-        conn.commit()
+    deleted = delete_rating_from_db(rating_id)
 
     return jsonify({
-        "success": True,
-        "message": f"Запись №{rating_id} удалена.",
+        "success": deleted,
+        "message": (
+            f"Запись №{rating_id} удалена."
+            if deleted else "Не удалось удалить запись."
+        ),
         "id": rating_id
     })
 
 
 @app.route("/api/ratings/bulk-delete", methods=["POST"])
 def bulk_delete_ratings():
+    user_id, error = require_editor()
+    if error:
+        return error
+
     data = request.get_json(silent=True) or {}
     ids = data.get("ids", [])
 
@@ -1158,22 +1277,28 @@ def bulk_delete_ratings():
         "success": True,
         "deleted": cursor.rowcount,
         "ids": clean_ids,
+        "editor_telegram_id": user_id,
         "message": f"Удалено записей: {cursor.rowcount}."
     })
 
 
 @app.route("/api/reset", methods=["POST"])
 def reset_api():
+    user_id, error = require_editor()
+    if error:
+        return error
+
     reset_database()
 
     return jsonify({
         "success": True,
-        "message": "Все отзывы удалены."
+        "message": "Все отзывы удалены.",
+        "editor_telegram_id": user_id
     })
 
 
 # ============================================================
-# TELEGRAM WEBHOOK ROUTES
+# WEBHOOK
 # ============================================================
 
 @app.route("/webhook", methods=["POST"])
@@ -1209,18 +1334,14 @@ def setup_webhook_route():
         "success": ok,
         "webhook": (
             f"{get_server_url()}/webhook"
-            if SERVER_URL
-            else None
+            if SERVER_URL else None
         )
     })
 
 
 @app.route("/telegram-info")
 def telegram_info():
-    ok, result = telegram_request(
-        "getWebhookInfo",
-        {}
-    )
+    ok, result = telegram_request("getWebhookInfo", {})
 
     return jsonify({
         "success": ok,
@@ -1251,9 +1372,7 @@ def health():
             os.path.join(TEMPLATES_DIR, "report_webapp.html")
         ),
         "ratings_count": count,
-        "time_utc": datetime.now(
-            timezone.utc
-        ).isoformat()
+        "time_utc": datetime.now(timezone.utc).isoformat()
     })
 
 
@@ -1269,9 +1388,13 @@ def error_404(error):
         "message": "Маршрут не найден.",
         "routes": [
             "/",
+            "/reports/view",
+            "/reports/edit",
             "/webapp/report",
+            "/webapp/report/edit",
             "/api/rating",
             "/api/ratings",
+            "/api/editor-status",
             "/api/ratings/<id>",
             "/api/ratings/bulk-delete",
             "/webhook",
