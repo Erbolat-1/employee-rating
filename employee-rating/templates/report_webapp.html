@@ -1,794 +1,262 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0"
-    >
-    <title>Отчёт по оценкам</title>
-
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-    <style>
-        :root {
-            --bg: #0f1720;
-            --card: #1b2732;
-            --card2: #202e39;
-            --text: #f4f7fa;
-            --muted: #98a6b5;
-            --blue: #2696e8;
-            --blue2: #1477bd;
-            --green: #38c793;
-            --yellow: #f5a623;
-            --red: #ef6262;
-            --border: rgba(255,255,255,.08);
-            --shadow: 0 14px 40px rgba(0,0,0,.20);
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            margin: 0;
-            padding: 0;
-            background:
-                radial-gradient(circle at top right, rgba(38,150,232,.12), transparent 35%),
-                var(--bg);
-            color: var(--text);
-            font-family:
-                Inter, -apple-system, BlinkMacSystemFont,
-                "Segoe UI", Arial, sans-serif;
-            min-height: 100vh;
-        }
-
-        .page {
-            width: min(1100px, 100%);
-            margin: 0 auto;
-            padding: 22px 16px 100px;
-        }
-
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 15px;
-            margin-bottom: 18px;
-        }
-
-        h1 {
-            margin: 0;
-            font-size: 26px;
-            line-height: 1.2;
-        }
-
-        .subtitle {
-            color: var(--muted);
-            margin-top: 7px;
-            font-size: 14px;
-        }
-
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-
-        .stat {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 15px;
-            box-shadow: var(--shadow);
-        }
-
-        .stat-label {
-            color: var(--muted);
-            font-size: 12px;
-            margin-bottom: 6px;
-        }
-
-        .stat-value {
-            font-size: 23px;
-            font-weight: 800;
-        }
-
-        .toolbar {
-            position: sticky;
-            top: 8px;
-            z-index: 20;
-            background: rgba(15,23,32,.94);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 12px;
-            margin-bottom: 15px;
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .select-all {
-            display: flex;
-            align-items: center;
-            gap: 9px;
-            margin-right: auto;
-            font-weight: 700;
-        }
-
-        input[type="checkbox"] {
-            width: 19px;
-            height: 19px;
-            accent-color: var(--blue);
-            cursor: pointer;
-        }
-
-        button {
-            border: 0;
-            border-radius: 11px;
-            padding: 11px 15px;
-            color: white;
-            font-weight: 700;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        button:disabled {
-            opacity: .45;
-            cursor: not-allowed;
-        }
-
-        .btn-blue {
-            background: var(--blue);
-        }
-
-        .btn-red {
-            background: var(--red);
-        }
-
-        .btn-gray {
-            background: #344452;
-        }
-
-        .count-selected {
-            color: var(--muted);
-            font-size: 13px;
-        }
-
-        .reports {
-            display: grid;
-            gap: 12px;
-        }
-
-        .report {
-            position: relative;
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            padding: 17px;
-            box-shadow: var(--shadow);
-            transition: transform .15s ease, border-color .15s ease;
-        }
-
-        .report.selected {
-            border-color: rgba(38,150,232,.7);
-        }
-
-        .report-top {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-        }
-
-        .report-check {
-            padding-top: 2px;
-        }
-
-        .report-main {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .report-title {
-            font-weight: 800;
-            font-size: 16px;
-            margin-bottom: 4px;
-        }
-
-        .report-meta {
-            color: var(--muted);
-            font-size: 13px;
-            line-height: 1.5;
-        }
-
-        .rating {
-            white-space: nowrap;
-            color: var(--yellow);
-            font-weight: 800;
-        }
-
-        .comment {
-            margin: 13px 0 12px;
-            padding: 12px 13px;
-            background: var(--card2);
-            border-radius: 12px;
-            color: #e9eef3;
-            line-height: 1.5;
-            word-break: break-word;
-        }
-
-        .bottom {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .sentiment {
-            display: inline-flex;
-            padding: 6px 9px;
-            border-radius: 9px;
-            font-size: 12px;
-            font-weight: 800;
-        }
-
-        .positive {
-            background: rgba(56,199,147,.14);
-            color: #63dfb1;
-        }
-
-        .neutral {
-            background: rgba(245,166,35,.14);
-            color: #ffc66a;
-        }
-
-        .negative {
-            background: rgba(239,98,98,.14);
-            color: #ff8c8c;
-        }
-
-        .date {
-            color: var(--muted);
-            font-size: 12px;
-        }
-
-        .delete-one {
-            background: rgba(239,98,98,.12);
-            color: #ff9292;
-            border: 1px solid rgba(239,98,98,.18);
-        }
-
-        .empty {
-            text-align: center;
-            padding: 55px 20px;
-            color: var(--muted);
-            background: var(--card);
-            border-radius: 18px;
-            border: 1px solid var(--border);
-        }
-
-        .modal-backdrop {
-            display: none;
-            position: fixed;
-            inset: 0;
-            z-index: 100;
-            background: rgba(0,0,0,.68);
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-
-        .modal-backdrop.show {
-            display: flex;
-        }
-
-        .modal {
-            width: min(470px, 100%);
-            background: #17222c;
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 22px;
-            box-shadow: 0 25px 80px rgba(0,0,0,.45);
-        }
-
-        .modal h2 {
-            margin: 0 0 10px;
-            font-size: 20px;
-        }
-
-        .modal-text {
-            color: #c9d2db;
-            line-height: 1.5;
-            white-space: pre-line;
-        }
-
-        .modal-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 9px;
-            margin-top: 18px;
-        }
-
-        .toast {
-            position: fixed;
-            left: 50%;
-            bottom: 24px;
-            transform: translate(-50%, 20px);
-            opacity: 0;
-            z-index: 200;
-            background: #253442;
-            color: white;
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 12px 16px;
-            box-shadow: var(--shadow);
-            transition: .2s ease;
-            pointer-events: none;
-        }
-
-        .toast.show {
-            opacity: 1;
-            transform: translate(-50%, 0);
-        }
-
-        @media (max-width: 650px) {
-            .page {
-                padding: 15px 10px 90px;
-            }
-
-            h1 {
-                font-size: 22px;
-            }
-
-            .stats {
-                grid-template-columns: 1fr;
-            }
-
-            .toolbar {
-                top: 0;
-            }
-
-            .select-all {
-                width: 100%;
-                margin-right: 0;
-            }
-
-            .report {
-                padding: 14px;
-            }
-
-            .bottom {
-                align-items: stretch;
-            }
-
-            .delete-one {
-                width: 100%;
-            }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>{{ "Редактор отчётов" if mode == "edit" else "Просмотр отчётов" }}</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{
+ --bg:#0f1720;--card:#1b2732;--card2:#202e39;--text:#f4f7fa;
+ --muted:#98a6b5;--blue:#2696e8;--green:#38c793;--yellow:#f5a623;
+ --red:#ef6262;--border:rgba(255,255,255,.08);
+}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at top right,rgba(38,150,232,.12),transparent 35%),var(--bg);
+color:var(--text);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;min-height:100vh}
+.page{width:min(1120px,100%);margin:auto;padding:18px 14px 90px}
+.header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:15px}
+h1{margin:0;font-size:25px}.subtitle{color:var(--muted);font-size:13px;margin-top:5px}
+.mode{padding:8px 11px;border-radius:10px;font-weight:800;font-size:12px;background:rgba(56,199,147,.14);color:#63dfb1}
+.mode.edit{background:rgba(245,166,35,.14);color:#ffc66a}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:13px}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:15px;padding:13px}
+.label{font-size:11px;color:var(--muted)}.value{font-size:21px;font-weight:800;margin-top:4px}
+.toolbar{position:sticky;top:6px;z-index:20;background:rgba(15,23,32,.95);backdrop-filter:blur(12px);
+border:1px solid var(--border);border-radius:15px;padding:10px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.search{flex:1;min-width:190px;background:#121d27;border:1px solid var(--border);border-radius:10px;padding:10px;color:white;outline:none}
+.select-all{display:flex;align-items:center;gap:7px;font-weight:700}
+input[type=checkbox]{width:18px;height:18px;accent-color:var(--blue)}
+button{border:0;border-radius:10px;padding:10px 13px;color:white;font-weight:800;cursor:pointer}
+button:disabled{opacity:.4;cursor:not-allowed}
+.blue{background:var(--blue)}.red{background:var(--red)}.gray{background:#344452}.green{background:var(--green);color:#06251a}
+.reports{display:grid;gap:10px}.report{background:var(--card);border:1px solid var(--border);border-radius:17px;padding:14px}
+.report.selected{border-color:rgba(38,150,232,.75)}
+.top{display:flex;gap:10px}.main{flex:1;min-width:0}
+.title{font-size:16px;font-weight:850}.meta{color:var(--muted);font-size:13px;margin-top:3px}
+.comment{margin:10px 0;padding:11px;background:var(--card2);border-radius:11px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+.bottom{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.rating{color:var(--yellow);font-weight:900}.date{color:var(--muted);font-size:11px}
+.sentiment{display:inline-block;padding:5px 8px;border-radius:8px;font-size:11px;font-weight:800;margin-left:7px}
+.pos{background:rgba(56,199,147,.14);color:#63dfb1}.neu{background:rgba(245,166,35,.14);color:#ffc66a}.neg{background:rgba(239,98,98,.14);color:#ff8c8c}
+.actions{display:flex;gap:7px;flex-wrap:wrap}.actions button{font-size:12px}
+.empty{text-align:center;padding:50px 15px;color:var(--muted);background:var(--card);border-radius:17px}
+.modal{display:none;position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.7);align-items:center;justify-content:center;padding:15px}
+.modal.show{display:flex}.box{width:min(520px,100%);background:#17222c;border:1px solid var(--border);border-radius:18px;padding:18px}
+.box h2{margin:0 0 13px}.field{margin:9px 0}.field label{display:block;color:var(--muted);font-size:12px;margin-bottom:5px}
+.field input,.field textarea,.field select{width:100%;background:#101a23;border:1px solid var(--border);border-radius:9px;color:white;padding:10px;outline:none}
+.field textarea{min-height:120px;resize:vertical}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translate(-50%,20px);opacity:0;z-index:200;background:#253442;border:1px solid var(--border);border-radius:10px;padding:11px 15px;transition:.2s}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.lock{padding:35px;text-align:center;background:var(--card);border:1px solid var(--border);border-radius:17px}
+@media(max-width:650px){.stats{grid-template-columns:1fr}.page{padding:12px 9px 80px}.header{align-items:flex-start}.mode{font-size:10px}.search{min-width:100%;}.toolbar{top:0}}
+</style>
 </head>
-
 <body>
 <div class="page">
+ <div class="header">
+  <div>
+   <h1>{{ "✏️ Редактор отчётов" if mode == "edit" else "👁 Просмотр отчётов" }}</h1>
+   <div class="subtitle">{{ "Изменение и удаление доступны администратору" if mode == "edit" else "Просмотр отзывов и статистики без изменения данных" }}</div>
+  </div>
+  <div class="mode {{ "edit" if mode == "edit" else "" }}">{{ "РЕДАКТОР" if mode == "edit" else "ПРОСМОТР" }}</div>
+ </div>
 
-    <div class="header">
-        <div>
-            <h1>📊 Отчёт по оценкам</h1>
-            <div class="subtitle">
-                Просмотр, выбор и удаление записей
-            </div>
+ <div id="lock" class="lock" style="display:none">
+   <div style="font-size:42px">🔐</div>
+   <h2>Доступ ограничен</h2>
+   <div style="color:var(--muted)">Редактор доступен только авторизованному Telegram-администратору.</div>
+   <button class="gray" style="margin-top:14px" onclick="location.href='/reports/view'">👁 Открыть просмотр</button>
+ </div>
+
+ <div id="content">
+  <div class="stats">
+   <div class="stat"><div class="label">Всего записей</div><div class="value" id="total">{{ ratings|length }}</div></div>
+   <div class="stat"><div class="label">Средняя оценка</div><div class="value">⭐ {{ average }}/5</div></div>
+   <div class="stat"><div class="label">Выбрано</div><div class="value" id="selectedCount">0</div></div>
+  </div>
+
+  <div class="toolbar">
+   {% if mode == "edit" %}
+   <label class="select-all"><input id="selectAll" type="checkbox" onchange="toggleAll(this.checked)"> Выбрать все</label>
+   {% endif %}
+   <input class="search" id="search" placeholder="🔎 Поиск по КПП, ФИО, отзыву..." oninput="filterReports()">
+   {% if mode == "edit" %}
+   <button class="red" id="bulkBtn" disabled onclick="confirmBulk()">🗑 Удалить выбранные</button>
+   {% endif %}
+   <button class="gray" onclick="location.reload()">🔄 Обновить</button>
+  </div>
+
+  <div class="reports" id="reports">
+   {% if ratings %}
+    {% for item in ratings %}
+    <article class="report" data-search="{{ (item.checkpoint ~ ' ' ~ item.employee_name ~ ' ' ~ item.comment)|lower }}" data-id="{{ item.id }}">
+      <div class="top">
+       {% if mode == "edit" %}
+       <input class="check" type="checkbox" value="{{ item.id }}" onchange="updateSelection()">
+       {% endif %}
+       <div class="main">
+        <div class="title">📍 {{ item.checkpoint }}</div>
+        <div class="meta">👤 {{ item.employee_name }} · №{{ item.id }}</div>
+        <div class="comment">{{ item.comment }}</div>
+        <div class="bottom">
+         <div>
+          <span class="rating">{{ "⭐" * item.rating }}</span> <b>{{ item.rating }}/5</b>
+          {% if item.sentiment == "Положительный" %}<span class="sentiment pos">{{ item.sentiment }}</span>
+          {% elif item.sentiment == "Нейтральный" %}<span class="sentiment neu">{{ item.sentiment }}</span>
+          {% else %}<span class="sentiment neg">{{ item.sentiment }}</span>{% endif %}
+         </div>
+         <div class="date">🕒 {{ item.created_at }}</div>
         </div>
-    </div>
 
-    <div class="stats">
-        <div class="stat">
-            <div class="stat-label">Всего записей</div>
-            <div class="stat-value" id="totalCount">
-                {{ ratings|length }}
-            </div>
+        {% if mode == "edit" %}
+        <div class="actions" style="margin-top:10px">
+          <button class="blue" onclick='openEdit({{ item|tojson }})'>✏️ Редактировать</button>
+          <button class="red" onclick='confirmSingle({{ item.id }}, {{ item.employee_name|tojson }})'>🗑 Удалить</button>
         </div>
-
-        <div class="stat">
-            <div class="stat-label">Средняя оценка</div>
-            <div class="stat-value">
-                ⭐ {{ average }}/5
-            </div>
-        </div>
-
-        <div class="stat">
-            <div class="stat-label">Выбрано</div>
-            <div class="stat-value" id="selectedCount">
-                0
-            </div>
-        </div>
-    </div>
-
-    <div class="toolbar">
-        <label class="select-all">
-            <input
-                type="checkbox"
-                id="selectAll"
-                onchange="toggleAll(this.checked)"
-            >
-            <span>Выбрать все</span>
-        </label>
-
-        <span class="count-selected" id="selectedText">
-            Ничего не выбрано
-        </span>
-
-        <button
-            class="btn-gray"
-            type="button"
-            onclick="location.reload()"
-        >
-            🔄 Обновить
-        </button>
-
-        <button
-            class="btn-red"
-            id="deleteSelectedBtn"
-            type="button"
-            disabled
-            onclick="openBulkDeleteModal()"
-        >
-            🗑 Удалить выбранные
-        </button>
-    </div>
-
-    <div class="reports" id="reportsList">
-
-        {% if ratings %}
-
-            {% for item in ratings %}
-
-                <article
-                    class="report"
-                    id="report-{{ item.id }}"
-                    data-id="{{ item.id }}"
-                >
-                    <div class="report-top">
-
-                        <div class="report-check">
-                            <input
-                                type="checkbox"
-                                class="report-checkbox"
-                                value="{{ item.id }}"
-                                onchange="updateSelection()"
-                                aria-label="Выбрать отчёт №{{ item.id }}"
-                            >
-                        </div>
-
-                        <div class="report-main">
-
-                            <div class="report-title">
-                                📍 {{ item.checkpoint }}
-                            </div>
-
-                            <div class="report-meta">
-                                👤 {{ item.employee_name }}
-                            </div>
-
-                            <div class="comment">
-                                {{ item.comment }}
-                            </div>
-
-                            <div class="bottom">
-
-                                <div>
-                                    <span class="rating">
-                                        {{ "⭐" * item.rating }}
-                                    </span>
-                                    <strong>
-                                        {{ item.rating }}/5
-                                    </strong>
-
-                                    {% if item.sentiment == "Положительный" %}
-                                        <span class="sentiment positive">
-                                            {{ item.sentiment }}
-                                        </span>
-                                    {% elif item.sentiment == "Нейтральный" %}
-                                        <span class="sentiment neutral">
-                                            {{ item.sentiment }}
-                                        </span>
-                                    {% else %}
-                                        <span class="sentiment negative">
-                                            {{ item.sentiment }}
-                                        </span>
-                                    {% endif %}
-                                </div>
-
-                                <div class="date">
-                                    🕒 {{ item.created_at }}
-                                </div>
-
-                                <button
-                                    class="delete-one"
-                                    type="button"
-                                    onclick="openSingleDeleteModal(
-                                        {{ item.id }},
-                                        {{ item.employee_name|tojson }},
-                                        {{ item.rating }},
-                                        {{ item.comment|tojson }}
-                                    )"
-                                >
-                                    🗑 Удалить
-                                </button>
-
-                            </div>
-
-                        </div>
-                    </div>
-                </article>
-
-            {% endfor %}
-
-        {% else %}
-
-            <div class="empty">
-                <div style="font-size:42px;margin-bottom:12px;">📋</div>
-                <div style="font-size:18px;font-weight:800;">
-                    Записей пока нет
-                </div>
-                <div style="margin-top:7px;">
-                    Новые оценки появятся здесь автоматически.
-                </div>
-            </div>
-
         {% endif %}
-
-    </div>
+       </div>
+      </div>
+    </article>
+    {% endfor %}
+   {% else %}
+    <div class="empty">📋<br><b>Записей пока нет</b><br><small>Новые оценки появятся здесь автоматически.</small></div>
+   {% endif %}
+  </div>
+ </div>
 </div>
 
-
-<!-- DELETE MODAL -->
-<div class="modal-backdrop" id="deleteModal">
-    <div class="modal">
-        <h2>⚠️ Подтверждение удаления</h2>
-
-        <div class="modal-text" id="deleteModalText"></div>
-
-        <div class="modal-actions">
-            <button
-                class="btn-gray"
-                type="button"
-                onclick="closeModal()"
-            >
-                ❌ Отмена
-            </button>
-
-            <button
-                class="btn-red"
-                type="button"
-                id="confirmDeleteBtn"
-            >
-                🗑 Да, удалить
-            </button>
-        </div>
-    </div>
+<div class="modal" id="deleteModal">
+ <div class="box">
+  <h2>⚠️ Подтверждение удаления</h2>
+  <div id="deleteText" style="color:#c9d2db;line-height:1.5"></div>
+  <div class="modal-actions"><button class="gray" onclick="closeDelete()">❌ Отмена</button><button class="red" onclick="doDelete()">🗑 Да, удалить</button></div>
+ </div>
 </div>
 
+<div class="modal" id="editModal">
+ <div class="box">
+  <h2>✏️ Редактировать отчёт</h2>
+  <input id="editId" type="hidden">
+  <div class="field"><label>Пункт пропуска</label><input id="editCheckpoint"></div>
+  <div class="field"><label>ФИО сотрудника</label><input id="editEmployee"></div>
+  <div class="field"><label>Оценка</label>
+   <select id="editRating"><option value="1">1 — Очень плохо</option><option value="2">2 — Плохо</option><option value="3">3 — Удовлетворительно</option><option value="4">4 — Хорошо</option><option value="5">5 — Отлично</option></select>
+  </div>
+  <div class="field"><label>Отзыв</label><textarea id="editComment"></textarea></div>
+  <div class="modal-actions"><button class="gray" onclick="closeEdit()">❌ Отмена</button><button class="green" onclick="saveEdit()">💾 Сохранить</button></div>
+ </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
-
 <script>
-    const tg =
-        window.Telegram &&
-        window.Telegram.WebApp
-            ? window.Telegram.WebApp
-            : null;
+const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+if(tg){tg.ready();tg.expand();}
 
-    if (tg) {
-        tg.ready();
-        tg.expand();
+const MODE = {{ mode|tojson }};
+const INIT_DATA = tg ? tg.initData : "";
+let deleteIds = [];
+
+function apiHeaders(extra={}){
+  return Object.assign({"Accept":"application/json","Content-Type":"application/json","X-Telegram-Init-Data":INIT_DATA},extra);
+}
+
+async function checkEditor(){
+  if(MODE !== "edit") return true;
+  try{
+    const r=await fetch("/api/editor-status",{headers:apiHeaders()});
+    const d=await r.json();
+    if(!d.editor){
+      document.getElementById("content").style.display="none";
+      document.getElementById("lock").style.display="block";
+      return false;
     }
+    return true;
+  }catch(e){
+    document.getElementById("content").style.display="none";
+    document.getElementById("lock").style.display="block";
+    return false;
+  }
+}
 
-    let deleteAction = null;
+function cards(){return [...document.querySelectorAll(".report")]}
+function selected(){return [...document.querySelectorAll(".check:checked")].map(x=>Number(x.value))}
+function updateSelection(){
+ const ids=selected();
+ const el=document.getElementById("selectedCount"); if(el) el.textContent=ids.length;
+ const btn=document.getElementById("bulkBtn"); if(btn) btn.disabled=!ids.length;
+ cards().forEach(c=>{const x=c.querySelector(".check");c.classList.toggle("selected",!!x&&x.checked)});
+ const all=document.querySelectorAll(".check"), sel=document.querySelectorAll(".check:checked"), sa=document.getElementById("selectAll");
+ if(sa){sa.checked=all.length>0&&sel.length===all.length;sa.indeterminate=sel.length>0&&sel.length<all.length}
+}
+function toggleAll(v){document.querySelectorAll(".check").forEach(x=>x.checked=v);updateSelection()}
+function filterReports(){
+ const q=(document.getElementById("search").value||"").trim().toLowerCase();
+ cards().forEach(c=>c.style.display=(c.dataset.search||"").includes(q)?"":"none");
+}
+function toast(t){const x=document.getElementById("toast");x.textContent=t;x.classList.add("show");setTimeout(()=>x.classList.remove("show"),2300)}
 
-    function selectedIds() {
-        return Array.from(
-            document.querySelectorAll(".report-checkbox:checked")
-        ).map(el => Number(el.value));
-    }
+function confirmSingle(id,name){
+ deleteIds=[Number(id)];
+ document.getElementById("deleteText").textContent=`Удалить отчёт №${id}?\n\nСотрудник: ${name}\n\nДанные будут удалены из базы.`;
+ document.getElementById("deleteModal").classList.add("show");
+}
+function confirmBulk(){
+ const ids=selected(); if(!ids.length)return;
+ deleteIds=ids;
+ document.getElementById("deleteText").textContent=`Вы выбрали ${ids.length} отчёт(ов).\n\nВсе выбранные записи будут удалены из базы.\n\nПродолжить?`;
+ document.getElementById("deleteModal").classList.add("show");
+}
+function closeDelete(){document.getElementById("deleteModal").classList.remove("show");deleteIds=[]}
 
-    function updateSelection() {
-        const ids = selectedIds();
-        const count = ids.length;
+async function doDelete(){
+ if(!deleteIds.length)return;
+ const ids=[...deleteIds]; closeDelete();
+ try{
+   let r,d;
+   if(ids.length===1){
+     r=await fetch(`/api/ratings/${ids[0]}`,{method:"DELETE",headers:apiHeaders()});
+   }else{
+     r=await fetch("/api/ratings/bulk-delete",{method:"POST",headers:apiHeaders(),body:JSON.stringify({ids})});
+   }
+   d=await r.json();
+   if(!r.ok||!d.success)throw new Error(d.message||"Ошибка удаления");
+   toast(ids.length===1?"✅ Отчёт удалён.":`✅ Удалено: ${d.deleted}`);
+   setTimeout(()=>location.reload(),650);
+ }catch(e){toast("❌ "+e.message)}
+}
 
-        document.getElementById("selectedCount").textContent = count;
+function openEdit(item){
+ document.getElementById("editId").value=item.id;
+ document.getElementById("editCheckpoint").value=item.checkpoint||"";
+ document.getElementById("editEmployee").value=item.employee_name||"";
+ document.getElementById("editRating").value=item.rating;
+ document.getElementById("editComment").value=item.comment||"";
+ document.getElementById("editModal").classList.add("show");
+}
+function closeEdit(){document.getElementById("editModal").classList.remove("show")}
+async function saveEdit(){
+ const id=Number(document.getElementById("editId").value);
+ const payload={
+  checkpoint:document.getElementById("editCheckpoint").value.trim(),
+  employee_name:document.getElementById("editEmployee").value.trim(),
+  rating:Number(document.getElementById("editRating").value),
+  comment:document.getElementById("editComment").value.trim()
+ };
+ if(!payload.checkpoint||!payload.employee_name){toast("❌ Заполните КПП и ФИО");return}
+ try{
+  const r=await fetch(`/api/ratings/${id}`,{method:"PUT",headers:apiHeaders(),body:JSON.stringify(payload)});
+  const d=await r.json();
+  if(!r.ok||!d.success)throw new Error(d.message||"Не удалось сохранить");
+  closeEdit();toast("✅ Изменения сохранены");setTimeout(()=>location.reload(),650);
+ }catch(e){toast("❌ "+e.message)}
+}
 
-        document.getElementById("selectedText").textContent =
-            count
-                ? `Выбрано отчётов: ${count}`
-                : "Ничего не выбрано";
+document.getElementById("deleteModal").addEventListener("click",e=>{if(e.target.id==="deleteModal")closeDelete()});
+document.getElementById("editModal").addEventListener("click",e=>{if(e.target.id==="editModal")closeEdit()});
 
-        document.getElementById("deleteSelectedBtn").disabled =
-            count === 0;
-
-        document.querySelectorAll(".report").forEach(card => {
-            const checkbox =
-                card.querySelector(".report-checkbox");
-
-            card.classList.toggle(
-                "selected",
-                checkbox && checkbox.checked
-            );
-        });
-
-        const all =
-            document.querySelectorAll(".report-checkbox");
-
-        const checked =
-            document.querySelectorAll(
-                ".report-checkbox:checked"
-            );
-
-        const selectAll =
-            document.getElementById("selectAll");
-
-        selectAll.checked =
-            all.length > 0 &&
-            checked.length === all.length;
-
-        selectAll.indeterminate =
-            checked.length > 0 &&
-            checked.length < all.length;
-    }
-
-    function toggleAll(checked) {
-        document.querySelectorAll(".report-checkbox")
-            .forEach(el => {
-                el.checked = checked;
-            });
-
-        updateSelection();
-    }
-
-    function openSingleDeleteModal(
-        id,
-        employee,
-        rating,
-        comment
-    ) {
-        document.getElementById("deleteModalText").textContent =
-            `Удалить отчёт №${id}?\n\n` +
-            `Сотрудник: ${employee}\n` +
-            `Оценка: ${rating}/5\n\n` +
-            `Отзыв: ${comment}`;
-
-        deleteAction = {
-            type: "single",
-            id: Number(id)
-        };
-
-        document.getElementById("deleteModal")
-            .classList.add("show");
-    }
-
-    function openBulkDeleteModal() {
-        const ids = selectedIds();
-
-        if (!ids.length) {
-            return;
-        }
-
-        document.getElementById("deleteModalText").textContent =
-            `Вы выбрали ${ids.length} отчёт(ов).\n\n` +
-            `Все выбранные записи будут удалены из базы данных.\n\n` +
-            `Продолжить?`;
-
-        deleteAction = {
-            type: "bulk",
-            ids
-        };
-
-        document.getElementById("deleteModal")
-            .classList.add("show");
-    }
-
-    function closeModal() {
-        document.getElementById("deleteModal")
-            .classList.remove("show");
-
-        deleteAction = null;
-    }
-
-    document.getElementById("confirmDeleteBtn")
-        .addEventListener("click", async () => {
-
-            if (!deleteAction) {
-                return;
-            }
-
-            const action = deleteAction;
-
-            closeModal();
-
-            try {
-                let response;
-
-                if (action.type === "single") {
-                    response = await fetch(
-                        `/api/ratings/${action.id}`,
-                        {
-                            method: "DELETE",
-                            headers: {
-                                "Accept": "application/json"
-                            }
-                        }
-                    );
-                } else {
-                    response = await fetch(
-                        "/api/ratings/bulk-delete",
-                        {
-                            method: "POST",
-                            headers: {
-                                "Content-Type":
-                                    "application/json",
-                                "Accept":
-                                    "application/json"
-                            },
-                            body: JSON.stringify({
-                                ids: action.ids
-                            })
-                        }
-                    );
-                }
-
-                const data = await response.json();
-
-                if (!response.ok || !data.success) {
-                    throw new Error(
-                        data.message ||
-                        "Не удалось удалить запись."
-                    );
-                }
-
-                showToast(
-                    action.type === "single"
-                        ? "✅ Отчёт удалён."
-                        : `✅ Удалено записей: ${data.deleted}.`
-                );
-
-                setTimeout(() => {
-                    location.reload();
-                }, 700);
-
-            } catch (error) {
-                showToast(
-                    "❌ " + error.message
-                );
-            }
-        });
-
-    document.getElementById("deleteModal")
-        .addEventListener("click", event => {
-            if (
-                event.target.id === "deleteModal"
-            ) {
-                closeModal();
-            }
-        });
-
-    function showToast(message) {
-        const toast =
-            document.getElementById("toast");
-
-        toast.textContent = message;
-        toast.classList.add("show");
-
-        setTimeout(() => {
-            toast.classList.remove("show");
-        }, 2500);
-    }
-
-    updateSelection();
+checkEditor().then(()=>updateSelection());
 </script>
-
 </body>
 </html>
